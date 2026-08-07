@@ -1,0 +1,6 @@
+# TLS-терминация для прода: Let's Encrypt получается и продлевается автоматически.
+# Домен берётся из env DOMAIN (задаётся в .env, по умолчанию shaprivezu.com).
+{$DOMAIN:shaprivezu.com} {
+	encode gzip
+	reverse_proxy frontend:3000
+}

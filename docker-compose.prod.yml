@@ -1,0 +1,26 @@
+# Прод-оверлей: добавляет Caddy (HTTPS, автоматический Let's Encrypt).
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# В .env на сервере обязательно:
+#   BACKEND_PORT=127.0.0.1:8000    # API не торчит наружу, только через фронт
+#   FRONTEND_PORT=127.0.0.1:3000   # наружу смотрят только 80/443 Caddy
+#   COOKIE_SECURE=true
+#   DOMAIN=shaprivezu.com
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-shaprivezu.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,75 @@
+name: shaprivezu
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
+      POSTGRES_DB: crm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_DSN: postgresql://crm:${POSTGRES_PASSWORD:-crm}@postgres:5432/crm
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"   # наружу — нужен для Gmail OAuth callback на localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Ежесуточный бэкап: pg_dump при старте и далее раз в 24 часа, храним последние 14 копий.
+  # Перед дампом ждём, пока бэкенд применит миграции — иначе первый дамп снимет пустую базу.
+  backup:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-crm}
+      TZ: Europe/Moscow
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          until psql -h postgres -U crm -d crm -t -c "SELECT 1 FROM schema_migrations LIMIT 1" >/dev/null 2>&1; do
+            echo "backup: жду применения миграций..."
+            sleep 15
+          done
+          ts=$$(date +%Y%m%d-%H%M%S)
+          if pg_dump -h postgres -U crm crm > "/backups/crm-$$ts.sql"; then
+            echo "backup ok: crm-$$ts.sql"
+          else
+            echo "backup FAILED: crm-$$ts.sql"
+            rm -f "/backups/crm-$$ts.sql"
+          fi
+          for old in $$(ls -1t /backups/crm-*.sql 2>/dev/null | tail -n +15); do
+            rm -f "$$old"
+          done
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY src ./src
+COPY migrations ./migrations
+RUN uv pip install --system --no-cache .
+
+ENV MIGRATIONS_DIR=/app/migrations
+EXPOSE 8000
+CMD ["uvicorn", "crm.main:app", "--host", "0.0.0.0", "--port", "8000"]
