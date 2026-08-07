@@ -18,10 +18,13 @@ make up          # соберёт и поднимет postgres + backend + front
 
 ## Почта (Gmail) — включается позже, CRM работает и без неё
 
-1. В [Google Cloud Console](https://console.cloud.google.com/) создайте проект → OAuth client ID типа **Desktop app**. Включите **Gmail API**.
+1. В [Google Cloud Console](https://console.cloud.google.com/) создайте проект → включите **Gmail API** (APIs & Services → Library).
 2. **Важно:** на экране OAuth consent переведите приложение из Testing в **Production** (кнопка Publish app; верификацию проходить не нужно). В статусе Testing refresh token живёт всего 7 дней.
-3. Впишите `GOOGLE_OAUTH_CLIENT_ID` и `GOOGLE_OAUTH_CLIENT_SECRET` в `.env`, перезапустите (`make up`).
-4. В CRM: Настройки → «Подключить Gmail» → выбрать рабочий ящик → согласиться (экран «Google hasn’t verified this app» → Advanced → Continue).
+3. Credentials → Create credentials → OAuth client ID:
+   - для прода — тип **Web application**, Authorized redirect URI: `https://shaprivezu.com/api/mail/oauth/callback` (точно совпадает с `PUBLIC_BASE_URL` + `/api/mail/oauth/callback`);
+   - для локального запуска — тип **Desktop app** (redirect на localhost разрешён сам собой).
+4. Впишите `GOOGLE_OAUTH_CLIENT_ID` и `GOOGLE_OAUTH_CLIENT_SECRET` в `.env`, примените: `docker compose up -d backend`.
+5. В CRM: Настройки → «Подключить Gmail» **под аккаунтом рабочего ящика** → согласиться (экран «Google hasn’t verified this app» → Advanced → Continue).
 
 Воркер читает только новые письма (whitelist доменов магазинов настраивается в Настройках), распознаёт их через LLM и двигает статусы: «магазин отправил» (появился трек) и «посылка на складе США». Всё остальное — руками; автоматика никогда не двигает статусы назад и не трогает отменённые/закрытые заказы. Нераспознанные письма попадают в очередь на экране «Почта».
 
