@@ -209,3 +209,33 @@ async def test_disabled_llm_is_unavailable():
     llm._settings.values["llm.enabled"] = False  # noqa: SLF001 — прямое управление фейком
     with pytest.raises(LLMUnavailableError):
         await extract(llm)
+
+
+def test_strip_fences_variants():
+    """json_object-режим: модель заворачивает JSON в fence или предисловие."""
+    from crm.infrastructure.llm.client import _strip_fences
+
+    clean = '{"a": 1}'
+    assert _strip_fences(clean) == clean
+    assert _strip_fences('```json\n{"a": 1}\n```') == clean
+    assert _strip_fences('Вот JSON:\n{"a": 1}\nГотово.') == clean
+    assert _strip_fences(None) is None
+    assert _strip_fences("совсем не json") == "совсем не json"
+
+
+def test_schema_has_no_nullable_enum_unions():
+    """Anthropic-провайдеры отдают 400 на enum при type: ["string","null"] —
+    nullable enum допустим только через anyOf."""
+    from crm.infrastructure.llm.client import JSON_SCHEMA
+
+    def walk(node):
+        if isinstance(node, dict):
+            if "enum" in node and isinstance(node.get("type"), list):
+                raise AssertionError(f"nullable enum без anyOf: {node}")
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(JSON_SCHEMA)

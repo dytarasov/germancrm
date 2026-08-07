@@ -113,18 +113,31 @@ JSON_SCHEMA = {
                     "required": ["number", "carrier"],
                     "properties": {
                         "number": {"type": "string"},
+                        # nullable enum ТОЛЬКО через anyOf: Anthropic-провайдеры
+                        # отвергают enum при union-типе ["string","null"] (400)
                         "carrier": {
-                            "type": ["string", "null"],
-                            "enum": [
-                                "ups", "usps", "fedex", "dhl", "amazon_logistics", "other", None,
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "enum": [
+                                        "ups", "usps", "fedex", "dhl",
+                                        "amazon_logistics", "other",
+                                    ],
+                                },
+                                {"type": "null"},
                             ],
                         },
                     },
                 },
             },
             "carrier": {
-                "type": ["string", "null"],
-                "enum": ["ups", "usps", "fedex", "dhl", "amazon_logistics", "other", None],
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "enum": ["ups", "usps", "fedex", "dhl", "amazon_logistics", "other"],
+                    },
+                    {"type": "null"},
+                ],
                 "description": "Основной перевозчик письма, если однозначен",
             },
             "summary": {
@@ -134,6 +147,20 @@ JSON_SCHEMA = {
         },
     },
 }
+
+
+def _strip_fences(content: str | None) -> str | None:
+    """В json_object-режиме модели заворачивают ответ в ```json-fence или
+    предваряют фразой — вырезаем сам JSON-объект (для чистого JSON это no-op).
+    None пропускаем как есть: TypeError уводит вызов в repair-цикл."""
+    if content is None:
+        return None
+    text = content.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        return text[start : end + 1]
+    return text
 
 
 class OpenRouterLLM:
@@ -194,7 +221,7 @@ class OpenRouterLLM:
                 cost += Decimal(str(usage["cost"]))
             try:
                 # content может быть None (глюк провайдера) — TypeError уводит в repair
-                parsed = _ExtractionModel.model_validate(json.loads(content))
+                parsed = _ExtractionModel.model_validate(json.loads(_strip_fences(content)))
             except (json.JSONDecodeError, ValidationError, TypeError) as exc:
                 last_error = exc
                 messages = [

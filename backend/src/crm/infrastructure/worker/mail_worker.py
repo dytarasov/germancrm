@@ -33,29 +33,32 @@ async def run_mail_worker(
             async with container() as scope:
                 mail = await scope.get(MailService)
                 interval = float(await mail.poll_interval_sec())
-                if await mail.has_credentials():
-                    conn = await scope.get(asyncpg.Connection)
-                    got_lock = await conn.fetchval(
-                        "SELECT pg_try_advisory_lock($1)", WORKER_LOCK_KEY
-                    )
-                    if got_lock:
-                        try:
-                            inserted = await mail.ingest_cycle()
-                            stats = await mail.process_cycle()
-                            refreshed = await mail.retro_match()
-                            if inserted or stats.processed or stats.manual:
-                                log.info(
-                                    "Цикл почты: +%s писем, обработано %s, в разбор %s, "
-                                    "подсказок обновлено %s",
-                                    inserted,
-                                    stats.processed,
-                                    stats.manual,
-                                    refreshed,
-                                )
-                        finally:
-                            await conn.fetchval(
-                                "SELECT pg_advisory_unlock($1)", WORKER_LOCK_KEY
+                conn = await scope.get(asyncpg.Connection)
+                got_lock = await conn.fetchval(
+                    "SELECT pg_try_advisory_lock($1)", WORKER_LOCK_KEY
+                )
+                if got_lock:
+                    try:
+                        # ingest сам no-op без Gmail-подключения, а обработка
+                        # очереди (LLM) и ретро-матчинг от Gmail не зависят:
+                        # письма из журнала и ручной «Повторить» должны
+                        # разбираться даже при отключённой/отозванной почте.
+                        inserted = await mail.ingest_cycle()
+                        stats = await mail.process_cycle()
+                        refreshed = await mail.retro_match()
+                        if inserted or stats.processed or stats.manual:
+                            log.info(
+                                "Цикл почты: +%s писем, обработано %s, в разбор %s, "
+                                "подсказок обновлено %s",
+                                inserted,
+                                stats.processed,
+                                stats.manual,
+                                refreshed,
                             )
+                    finally:
+                        await conn.fetchval(
+                            "SELECT pg_advisory_unlock($1)", WORKER_LOCK_KEY
+                        )
             failures = 0
         except asyncio.CancelledError:
             raise
