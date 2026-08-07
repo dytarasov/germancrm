@@ -4,3 +4,15 @@
 	encode gzip
 	reverse_proxy frontend:3000
 }
+
+# Явный редирект http→https (catch-all ниже перехватил бы его).
+http://{$DOMAIN:shaprivezu.com} {
+	redir https://{$DOMAIN:shaprivezu.com}{uri} 308
+}
+
+# ACME-challenge для чужих сертификатов на этом сервере (certbot webroot,
+# например VPN-домен): certbot кладёт файлы в /var/www/certbot на хосте.
+http:// {
+	root * /srv/certbot
+	file_server
+}
