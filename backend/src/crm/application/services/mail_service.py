@@ -711,31 +711,39 @@ class MailService:
     # ---------------- Ретро-матчинг ----------------
 
     async def retro_match(self) -> int:
-        """Обновляет подсказки-кандидаты у открытых треков.
+        """Пересчитывает подсказки-кандидаты у ВСЕХ открытых треков.
 
-        Автопривязку здесь НЕ делаем: без письма нет сигналов (номер заказа,
-        магазин), и один и тот же топ-кандидат привязал бы к себе все открытые
-        треки разом. Привязка задним числом — только руками по подсказкам.
-        Треки с уже сохранёнными кандидатами (информативными, из письма)
-        не трогаем — generic-скоринг их только испортил бы."""
-        open_tracks = [t for t in await self._tracks.open_tracks() if not t.candidates]
+        Автопривязку здесь НЕ делаем: один и тот же топ-кандидат привязал бы
+        к себе все открытые треки разом — привязка задним числом только руками.
+        Но подсказки освежаются каждый цикл: заказ, созданный ПОСЛЕ письма,
+        обязан появиться в кандидатах старого трека. Контекст исходного письма
+        (магазин, номер заказа) при пересчёте сохраняется через email_log_id."""
+        open_tracks = await self._tracks.open_tracks()
         if not open_tracks:
             return 0
-        candidates = await self._orders.candidates_for_matching(
+        pool = await self._orders.candidates_for_matching(
             statuses=[OrderStatus.PURCHASED, OrderStatus.SHIPPED], max_age_days=60
         )
-        scored = self._matcher.score_orders(candidates)
-        top = [
-            {
-                "order_id": c.row.order.id,
-                "score": c.score,
-                "reasons": c.reasons,
-                "order_label": order_label(c.row),
-            }
-            for c in scored[:3]
-        ]
         refreshed = 0
         for track in open_tracks:
+            store_domain = order_number = None
+            if track.email_log_id is not None:
+                entry = await self._emails.get(track.email_log_id)
+                extracted = (entry.extracted or {}) if entry else {}
+                store_domain = extracted.get("store_domain")
+                order_number = extracted.get("order_number")
+            scored = self._matcher.score_orders(
+                pool, store_domain=store_domain, order_number=order_number
+            )
+            top = [
+                {
+                    "order_id": c.row.order.id,
+                    "score": c.score,
+                    "reasons": c.reasons,
+                    "order_label": order_label(c.row),
+                }
+                for c in scored[:3]
+            ]
             await self._tracks.update(track.id, {"candidates": top or None})
             refreshed += 1
         return refreshed

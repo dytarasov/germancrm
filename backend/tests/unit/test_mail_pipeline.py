@@ -338,3 +338,33 @@ async def test_low_confidence_no_auto_actions(env):
     track = await env.tracks.get_by_number("1Z999AA10123456784")
     assert track is not None and track.order_id is None
     assert env.orders.storage[1].status == OrderStatus.PURCHASED
+
+
+async def test_retro_match_refreshes_stale_candidates(env):
+    """Заказ, созданный ПОСЛЕ письма, появляется в подсказках старого трека,
+    а протухшие кандидаты пересчитываются (контекст письма сохраняется)."""
+    env.emails.seed_entry(
+        id=10,
+        body_text="Track 1ZNIKE1234567890AB",
+        extracted={"store_domain": "nike.com", "order_number": None},
+    )
+    await env.tracks.add(
+        tracking_number="1ZNIKE1234567890AB",
+        carrier="ups",
+        order_id=None,
+        source="email",
+        email_log_id=10,
+        match_status="open",
+        candidates=[{"order_id": 999, "score": 45, "reasons": ["устаревший расчёт"], "order_label": "Заказ #999"}],
+        note=None,
+    )
+    env.orders.seed(make_order(id=7, store="Nike"))
+    svc = env.mail_service(StubLLM())
+
+    refreshed = await svc.retro_match()
+
+    assert refreshed == 1
+    track = await env.tracks.get_by_number("1ZNIKE1234567890AB")
+    ids = [c.order_id for c in track.candidates]
+    assert 7 in ids, "новый Nike-заказ должен попасть в подсказки"
+    assert 999 not in ids, "протухшие кандидаты пересчитаны заново"
