@@ -48,8 +48,11 @@ async function logout() {
 
 function Logo() {
   return (
-    <span className="text-[15px] font-semibold tracking-tight">
-      sha<span className="text-accent">privezu</span>
+    <span className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+      <img src="/logo.png" alt="" className="size-5 rounded-[5px]" />
+      <span>
+        sha<span className="text-accent">privezu</span>
+      </span>
     </span>
   );
 }

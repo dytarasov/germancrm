@@ -13,5 +13,8 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|healthz|_next/static|_next/image|favicon.ico).*)"],
+  // Последняя группа исключает файлы статики (всё с расширением: logo.png,
+  // icon.png, apple-icon.png и т.п.) — иначе логотип на странице логина
+  // редиректится на /login и не загружается.
+  matcher: ["/((?!api|healthz|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

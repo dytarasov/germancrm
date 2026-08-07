@@ -28,11 +28,14 @@ export default function LoginPage() {
         <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
           <div className="airmail rounded-none" />
           <form onSubmit={submit} className="space-y-4 p-6">
-            <div>
-              <h1 className="text-[17px] font-semibold tracking-tight">
-                sha<span className="text-accent">privezu</span>
-              </h1>
-              <p className="mt-0.5 text-[12.5px] text-muted">Выкуп в США → доставка клиентам</p>
+            <div className="flex items-center gap-2.5">
+              <img src="/logo.png" alt="" className="size-9 rounded-[8px]" />
+              <div>
+                <h1 className="text-[17px] font-semibold tracking-tight">
+                  sha<span className="text-accent">privezu</span>
+                </h1>
+                <p className="mt-0.5 text-[12.5px] text-muted">Выкуп в США → доставка клиентам</p>
+              </div>
             </div>
             <div>
               <Input
