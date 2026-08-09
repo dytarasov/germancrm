@@ -44,7 +44,7 @@ def make_order(**overrides: Any) -> Order:
         "purchase_price_usd": Decimal("1000.00"),
         "commission_usd": None,
         "weight_kg": None,
-        "weight_is_final": False,
+        "est_weight_kg": None,
         "promised_date": None,
         "comment": None,
         "status": OrderStatus.PURCHASED,

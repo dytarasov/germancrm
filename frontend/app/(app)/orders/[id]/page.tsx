@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
-import type { Flight, OrderDetail, OrderItem, OrderStatus, Payment, Track } from "@/lib/api-types";
+import type { Flight, OrderDetail, OrderItem, OrderStatus, Payment, Settings, Track } from "@/lib/api-types";
 import { STATUS_LABEL, isTerminal } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, isoToday, safeHref } from "@/lib/format";
 import { Badge, Button, Card, Field, Input, Section, Spinner, cx } from "@/components/ui";
@@ -34,6 +34,10 @@ export default function OrderPage() {
   const { data: flights } = useQuery({
     queryKey: ["flights"],
     queryFn: () => api.get<Flight[]>("/api/flights"),
+  });
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<Settings>("/api/settings"),
   });
 
   const apply = (d: OrderDetail) => {
@@ -170,11 +174,65 @@ export default function OrderPage() {
       .catch((err) => toastError(err.message));
   };
 
+  const tariff = settings?.commission_per_kg_usd ?? 50;
   const weight = order.weight_kg ? parseFloat(order.weight_kg) : null;
+  const estWeight = order.est_weight_kg ? parseFloat(order.est_weight_kg) : null;
   const commissionHint =
-    weight && order.commission_usd === null
-      ? `Подсказка: ${weight} кг × $50 = $${(weight * 50).toFixed(2)}`
+    order.commission_usd !== null
+      ? undefined
+      : weight
+        ? `Подсказка: ${weight} кг × $${tariff} = $${(weight * tariff).toFixed(2)}`
+        : estWeight
+          ? `Ориентир по прогнозу: ${estWeight} кг × $${tariff} ≈ $${(estWeight * tariff).toFixed(2)} — закрыть заказ с ним нельзя`
+          : undefined;
+  const weightDiff = weight !== null && estWeight !== null ? weight - estWeight : null;
+  const weightDiffHint =
+    weightDiff !== null && Math.abs(weightDiff) >= 0.001
+      ? `прогноз был ${estWeight} кг (факт ${weightDiff > 0 ? "+" : "−"}${Math.abs(weightDiff).toFixed(3).replace(/\.?0+$/, "")} кг) — возможно, стоит предупредить клиента`
       : undefined;
+
+  // Сохранение фактического веса: бэкенд может сам рассчитать комиссию по тарифу
+  // (только если она была пуста) — подсветим и дадим откатить обе правки разом.
+  const saveWeight = (v: string | null) => {
+    const prev = order;
+    patch.mutate(
+      { weight_kg: v === null ? null : v.replace(",", ".") },
+      {
+        onSuccess: (d) => {
+          const auto = prev.commission_usd === null && d.commission_usd !== null;
+          toastSaved(
+            () =>
+              patch.mutate({
+                weight_kg: prev.weight_kg,
+                ...(auto ? { commission_usd: null } : {}),
+              }),
+            auto
+              ? `Комиссия $${d.commission_usd} рассчитана от веса ($${tariff}/кг)`
+              : "Сохранено",
+          );
+          if (auto) {
+            setCommissionFlash(true);
+            setTimeout(() => setCommissionFlash(false), 2500);
+          }
+        },
+      },
+    );
+  };
+
+  // «Полная стоимость» = закупка + комиссия; правка выставляет комиссию.
+  const saveTotal = (v: string | null) => {
+    if (v === null) return;
+    const total = parseFloat(v.replace(",", "."));
+    const purchase = parseFloat(order.purchase_price_usd);
+    if (!Number.isFinite(total)) return;
+    if (total < purchase) {
+      toastError(
+        `Полная стоимость меньше закупки ($${order.purchase_price_usd}) — комиссия вышла бы отрицательной`,
+      );
+      return;
+    }
+    saveField("commission_usd", (total - purchase).toFixed(2), order.commission_usd);
+  };
 
   const saving = patch.isPending || statusMut.isPending || closeMut.isPending;
 
@@ -282,23 +340,23 @@ export default function OrderPage() {
               onSave={(v) => saveField("commission_usd", v, order.commission_usd)}
             />
           </div>
-          <div>
-            <InlineField
-              label="Вес, кг"
-              value={order.weight_kg}
-              type="number"
-              placeholder="не взвешен"
-              onSave={(v) => saveField("weight_kg", v, order.weight_kg)}
-            />
-            <label className="mt-1 flex items-center gap-1.5 px-2 text-[12px] text-muted">
-              <input
-                type="checkbox"
-                checked={order.weight_is_final}
-                onChange={(e) => saveField("weight_is_final", e.target.checked, order.weight_is_final)}
-              />
-              вес финальный
-            </label>
-          </div>
+          <InlineField
+            label="Вес фактический, кг"
+            value={order.weight_kg}
+            type="number"
+            placeholder="не взвешен"
+            hint={weightDiffHint}
+            onSave={saveWeight}
+          />
+          <InlineField
+            label="Вес предполагаемый, кг"
+            value={order.est_weight_kg}
+            type="number"
+            placeholder="прогноз"
+            onSave={(v) =>
+              saveField("est_weight_kg", v === null ? null : v.replace(",", "."), order.est_weight_kg)
+            }
+          />
           <div>
             <div className="mb-0.5 px-2 text-[11.5px] font-medium text-muted">Обещанная дата</div>
             <DatePicker
@@ -348,7 +406,13 @@ export default function OrderPage() {
         {/* Финансы + действия */}
         <div className="space-y-3">
           <Card className="space-y-2 p-4">
-            <Row k="Выручка" v={fmtMoney(order.finance.revenue_usd)} />
+            <InlineField
+              label="Полная стоимость, $ (закупка + комиссия)"
+              value={order.finance.revenue_usd}
+              type="money"
+              placeholder="нет комиссии — впишите сумму"
+              onSave={saveTotal}
+            />
             <Row k="Оплачено" v={fmtMoney(order.finance.paid_usd)} />
             <div className="border-t border-line pt-2">
               <Row

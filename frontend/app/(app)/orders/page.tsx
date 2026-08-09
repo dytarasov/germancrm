@@ -6,7 +6,7 @@ import Link from "next/link";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebounced } from "@/lib/use-debounced";
 import { api } from "@/lib/api";
-import type { ClientListItem, OrderDetail, OrderListItem, OrderStatus } from "@/lib/api-types";
+import type { ClientListItem, OrderDetail, OrderListItem, OrderStatus, Settings } from "@/lib/api-types";
 import { STATUS_LABEL } from "@/lib/status";
 import { fmtMoney } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Seg, Textarea } from "@/components/ui";
@@ -37,6 +37,11 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
     queryFn: () => api.get<ClientListItem[]>("/api/clients"),
     enabled: open,
   });
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<Settings>("/api/settings"),
+    enabled: open,
+  });
 
   const [clientId, setClientId] = useState<string>("");
   const [newClient, setNewClient] = useState(false);
@@ -47,6 +52,8 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [items, setItems] = useState("");
   const [links, setLinks] = useState("");
   const [price, setPrice] = useState("");
+  const [commission, setCommission] = useState("");
+  const [estWeight, setEstWeight] = useState("");
   const [promised, setPromised] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -72,6 +79,8 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         store: store.trim(),
         items: items.trim(),
         purchase_price_usd: price.trim(),
+        commission_usd: commission.trim() || undefined,
+        est_weight_kg: estWeight.trim().replace(",", ".") || undefined,
         promised_date: promised || null,
         links: linkList.length > 0 ? linkList : undefined,
       });
@@ -86,6 +95,14 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
 
   const valid =
     (newClient ? clientName.trim() : clientId) && store.trim() && items.trim() && price.trim();
+
+  // Прогноз комиссии от предполагаемого веса — ориентир, в БД не пишется.
+  const tariff = settings?.commission_per_kg_usd ?? 50;
+  const estW = parseFloat(estWeight.replace(",", "."));
+  const estCommissionHint =
+    commission.trim() === "" && Number.isFinite(estW) && estW > 0
+      ? `Ориентир: ${estW} кг × $${tariff}/кг ≈ $${(estW * tariff).toFixed(2)}. Это прогноз — закрыть заказ можно будет только с настоящей комиссией (появится от фактического веса или руками).`
+      : null;
 
   return (
     <Modal open={open} onClose={onClose} title="Новый заказ">
@@ -143,6 +160,29 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             onChange={(e) => setItems(e.target.value)}
           />
         </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Комиссия, $ (можно позже)">
+            <Input
+              placeholder="0.00"
+              inputMode="decimal"
+              className="font-mono"
+              value={commission}
+              onChange={(e) => setCommission(e.target.value)}
+            />
+          </Field>
+          <Field label="Предполагаемый вес, кг">
+            <Input
+              placeholder="0.0"
+              inputMode="decimal"
+              className="font-mono"
+              value={estWeight}
+              onChange={(e) => setEstWeight(e.target.value)}
+            />
+          </Field>
+        </div>
+        {estCommissionHint && (
+          <p className="text-[12px] text-muted">{estCommissionHint}</p>
+        )}
         <Field label="Ссылки на товар (по одной на строку, необязательно)">
           <Textarea
             rows={3}
@@ -161,7 +201,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
           />
         </Field>
         <p className="text-[12px] text-muted">
-          Остальное — комиссия, вес, треки — добавите в карточке, когда появится.
+          Фактический вес и треки добавите в карточке, когда появятся.
         </p>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" onClick={onClose}>

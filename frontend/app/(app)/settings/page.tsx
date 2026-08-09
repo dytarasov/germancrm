@@ -114,6 +114,31 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-4">
       <h1 className="text-[17px] font-semibold tracking-tight">Настройки</h1>
 
+      <Section title="Комиссия">
+        <label className="flex flex-wrap items-center gap-2 text-[13px]">
+          Тариф
+          <Input
+            className="w-24 font-mono"
+            inputMode="decimal"
+            defaultValue={settings.commission_per_kg_usd}
+            onBlur={(e) => {
+              const n = parseFloat(e.target.value.replace(",", "."));
+              if (!Number.isFinite(n) || n < 0) {
+                toastError("Тариф — неотрицательное число");
+                e.target.value = String(settings.commission_per_kg_usd);
+                return;
+              }
+              if (n !== settings.commission_per_kg_usd)
+                patch.mutate({ commission_per_kg_usd: n });
+            }}
+          />
+          $/кг
+          <span className="text-[12px] text-muted">
+            от него считаются ориентир по предполагаемому весу и автокомиссия от фактического
+          </span>
+        </label>
+      </Section>
+
       <Section title="Gmail">
         {settings.gmail.connected ? (
           <div className="flex flex-wrap items-center gap-3 text-[13px]">

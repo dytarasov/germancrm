@@ -24,7 +24,7 @@ _INSERTABLE = {
     "purchase_price_usd",
     "commission_usd",
     "weight_kg",
-    "weight_is_final",
+    "est_weight_kg",
     "promised_date",
     "comment",
     "status",

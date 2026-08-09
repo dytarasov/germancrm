@@ -13,6 +13,7 @@ from tests.unit.fakes import (
     FakeOrderItemRepository,
     FakeOrderRepository,
     FakePaymentRepository,
+    FakeSettingsRepository,
     FakeStatusHistoryRepository,
     FakeTrackRepository,
     FakeUnitOfWork,
@@ -43,6 +44,7 @@ def service(orders, history, items) -> OrderService:
         FakeTrackRepository(),
         FakePaymentRepository(),
         history,
+        FakeSettingsRepository(),
         FakeUnitOfWork(),
     )
 
@@ -93,6 +95,52 @@ class TestManualStatus:
         await service.close(1)
         with pytest.raises(DomainValidationError):
             await service.update(1, {"commission_usd": None})
+
+
+class TestAutoCommission:
+    """Фактический вес заполняет комиссию по тарифу — но никогда не перетирает ручную."""
+
+    async def test_weight_fills_empty_commission_by_tariff(self, orders, history, items):
+        settings = FakeSettingsRepository({"commission.per_kg_usd": 60})
+        service = OrderService(
+            orders,
+            items,
+            FakeTrackRepository(),
+            FakePaymentRepository(),
+            history,
+            settings,
+            FakeUnitOfWork(),
+        )
+        orders.seed(make_order(id=1, commission_usd=None))
+        detail = await service.update(1, {"weight_kg": Decimal("2.5")})
+        assert detail.order.commission_usd == Decimal("150.00")
+
+    async def test_default_tariff_when_setting_absent(self, service, orders):
+        orders.seed(make_order(id=1, commission_usd=None))
+        detail = await service.update(1, {"weight_kg": Decimal("1.5")})
+        assert detail.order.commission_usd == Decimal("75.00")
+
+    async def test_weight_does_not_touch_manual_commission(self, service, orders):
+        orders.seed(make_order(id=1, commission_usd=Decimal("80")))
+        detail = await service.update(1, {"weight_kg": Decimal("2.5")})
+        assert detail.order.commission_usd == Decimal("80")
+
+    async def test_explicit_commission_in_same_patch_wins(self, service, orders):
+        orders.seed(make_order(id=1, commission_usd=None))
+        detail = await service.update(
+            1, {"weight_kg": Decimal("2"), "commission_usd": Decimal("70")}
+        )
+        assert detail.order.commission_usd == Decimal("70")
+
+    async def test_est_weight_never_fills_commission(self, service, orders):
+        orders.seed(make_order(id=1, commission_usd=None))
+        detail = await service.update(1, {"est_weight_kg": Decimal("3")})
+        assert detail.order.commission_usd is None
+
+    async def test_clearing_weight_keeps_commission(self, service, orders):
+        orders.seed(make_order(id=1, commission_usd=Decimal("100"), weight_kg=Decimal("2")))
+        detail = await service.update(1, {"weight_kg": None})
+        assert detail.order.commission_usd == Decimal("100")
 
 
 class TestCancelRefund:
@@ -160,7 +208,8 @@ class TestCopy:
                 status=OrderStatus.CANCELLED,
                 store_order_number="113-111",
                 commission_usd=Decimal("55"),
-                weight_is_final=True,
+                weight_kg=Decimal("2.4"),
+                est_weight_kg=Decimal("2.0"),
             )
         )
         detail = await service.copy(1)
@@ -170,7 +219,8 @@ class TestCopy:
         assert copy.status == OrderStatus.PURCHASED
         assert copy.store_order_number is None
         assert copy.commission_usd == Decimal("55")
-        assert copy.weight_is_final is False
+        assert copy.weight_kg is None  # факт принадлежит старой посылке
+        assert copy.est_weight_kg == Decimal("2.0")
         assert detail.tracks == []
         assert detail.payments == []
 
@@ -179,7 +229,13 @@ class TestDelete:
     async def test_delete_releases_tracks_to_open_queue(self, orders, history, items):
         tracks = FakeTrackRepository()
         service = OrderService(
-            orders, items, tracks, FakePaymentRepository(), history, FakeUnitOfWork()
+            orders,
+            items,
+            tracks,
+            FakePaymentRepository(),
+            history,
+            FakeSettingsRepository(),
+            FakeUnitOfWork(),
         )
         orders.seed(make_order(id=1))
         await tracks.add(
@@ -200,7 +256,13 @@ class TestDelete:
     async def test_delete_keeps_dismissed_tracks_dismissed(self, orders, history, items):
         tracks = FakeTrackRepository()
         service = OrderService(
-            orders, items, tracks, FakePaymentRepository(), history, FakeUnitOfWork()
+            orders,
+            items,
+            tracks,
+            FakePaymentRepository(),
+            history,
+            FakeSettingsRepository(),
+            FakeUnitOfWork(),
         )
         orders.seed(make_order(id=1))
         await tracks.add(

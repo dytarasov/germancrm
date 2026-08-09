@@ -52,7 +52,7 @@ def record_to_order(r: asyncpg.Record) -> Order:
         purchase_price_usd=r["purchase_price_usd"],
         commission_usd=r["commission_usd"],
         weight_kg=r["weight_kg"],
-        weight_is_final=r["weight_is_final"],
+        est_weight_kg=r["est_weight_kg"],
         promised_date=r["promised_date"],
         comment=r["comment"],
         status=OrderStatus(r["status"]),

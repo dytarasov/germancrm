@@ -122,7 +122,7 @@ def order_detail_to_out(detail: OrderDetail, today: date) -> OrderDetailOut:
         paid_usd=detail.paid_usd,
         due_usd=finance.due_usd,
         tracks_count=detail.tracks_count,
-        weight_is_final=o.weight_is_final,
+        est_weight_kg=o.est_weight_kg,
         comment=o.comment,
         refunded_amount_usd=o.refunded_amount_usd,
         refunded_at=o.refunded_at,
@@ -276,6 +276,7 @@ def mail_event_to_out(e: EmailEventRow) -> MailEventOut:
 def settings_view_to_out(view: SettingsView) -> SettingsOut:
     v = view.values
     return SettingsOut(
+        commission_per_kg_usd=float(v.get("commission_per_kg_usd") or 50),
         llm_model=v.get("llm_model") or "",
         llm_enabled=bool(v.get("llm_enabled", True)),
         llm_auto_min_confidence=float(v.get("llm_auto_min_confidence") or 0.75),

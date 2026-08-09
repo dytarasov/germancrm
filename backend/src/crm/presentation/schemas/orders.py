@@ -17,7 +17,7 @@ class OrderCreate(BaseModel):
     purchase_price_usd: Decimal = Field(ge=0)
     commission_usd: Decimal | None = Field(default=None, ge=0)
     weight_kg: Decimal | None = Field(default=None, ge=0)
-    weight_is_final: bool = False
+    est_weight_kg: Decimal | None = Field(default=None, ge=0)
     promised_date: date | None = None
     comment: str | None = None
     store_order_number: str | None = None
@@ -59,7 +59,7 @@ class OrderUpdate(BaseModel):
     purchase_price_usd: Decimal | None = Field(default=None, ge=0)
     commission_usd: Decimal | None = Field(default=None, ge=0)
     weight_kg: Decimal | None = Field(default=None, ge=0)
-    weight_is_final: bool | None = None
+    est_weight_kg: Decimal | None = Field(default=None, ge=0)
     promised_date: date | None = None
     comment: str | None = None
     store_order_number: str | None = None
@@ -112,7 +112,7 @@ class OrderListItemOut(BaseModel):
 
 
 class OrderDetailOut(OrderListItemOut):
-    weight_is_final: bool
+    est_weight_kg: Decimal | None
     comment: str | None
     refunded_amount_usd: Decimal | None
     refunded_at: datetime | None

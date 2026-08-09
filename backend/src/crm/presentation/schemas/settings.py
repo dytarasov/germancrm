@@ -10,6 +10,7 @@ class GmailConnectionOut(BaseModel):
 
 
 class SettingsOut(BaseModel):
+    commission_per_kg_usd: float
     llm_model: str
     llm_enabled: bool
     llm_auto_min_confidence: float
@@ -24,6 +25,7 @@ class SettingsOut(BaseModel):
 
 
 class SettingsPatch(BaseModel):
+    commission_per_kg_usd: float | None = Field(default=None, ge=0, le=100000)
     llm_model: str | None = Field(default=None, min_length=1)
     llm_enabled: bool | None = None
     llm_auto_min_confidence: float | None = Field(default=None, ge=0, le=1)

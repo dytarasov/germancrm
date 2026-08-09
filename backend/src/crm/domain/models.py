@@ -52,8 +52,8 @@ class Order:
     items: str
     purchase_price_usd: Decimal
     commission_usd: Decimal | None  # None = «ещё не знаю», 0 = «без наценки»
-    weight_kg: Decimal | None
-    weight_is_final: bool
+    weight_kg: Decimal | None  # фактический, после взвешивания
+    est_weight_kg: Decimal | None  # прогноз при создании; комиссия от него — лишь ориентир
     promised_date: date | None
     comment: str | None
     status: OrderStatus
@@ -301,3 +301,11 @@ class MoneyReportOrderRow:
     items: str
     commission_usd: Decimal
     closed_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class LoginBan:
+    ip: str
+    fails: int
+    last_fail_at: datetime
+    banned_until: datetime | None

@@ -56,6 +56,7 @@ class TestCommission:
     def test_suggested_commission(self):
         assert rules.suggest_commission(Decimal("2.5")) == Decimal("125.00")
         assert rules.suggest_commission(Decimal("0.454")) == Decimal("22.70")
+        assert rules.suggest_commission(Decimal("2"), Decimal("65")) == Decimal("130.00")
 
 
 class TestOverdue:

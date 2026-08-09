@@ -84,7 +84,7 @@ export interface OrderItem {
 }
 
 export interface OrderDetail extends OrderListItem {
-  weight_is_final: boolean;
+  est_weight_kg: string | null;
   comment: string | null;
   refunded_amount_usd: string | null;
   refunded_at: string | null;
@@ -255,7 +255,15 @@ export interface EmailDetail extends EmailRow {
   extracted: EmailExtracted | null;
 }
 
+export interface LoginBan {
+  ip: string;
+  fails: number;
+  last_fail_at: string;
+  banned_until: string | null;
+}
+
 export interface Settings {
+  commission_per_kg_usd: number;
   llm_model: string;
   llm_enabled: boolean;
   llm_auto_min_confidence: number;

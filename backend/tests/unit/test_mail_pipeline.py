@@ -83,6 +83,7 @@ def make_env():
                 self.tracks,
                 FakePaymentRepository(),
                 self.history,
+                self.settings,
                 FakeUnitOfWork(),
             )
             return MailService(

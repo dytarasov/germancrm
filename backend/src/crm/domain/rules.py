@@ -36,6 +36,7 @@ OVERDUE_STATUSES = {
 # Автоматика умеет двигать только сюда.
 AUTO_TARGETS = {OrderStatus.SHIPPED, OrderStatus.AT_WAREHOUSE}
 
+# Дефолт тарифа; рабочее значение живёт в настройках (commission.per_kg_usd).
 COMMISSION_PER_KG_USD = Decimal("50")
 _CENT = Decimal("0.01")
 
@@ -63,8 +64,10 @@ def can_auto_advance(current: OrderStatus, new: OrderStatus) -> bool:
     return flow_index(new) > flow_index(current) >= 0
 
 
-def suggest_commission(weight_kg: Decimal) -> Decimal:
-    return (weight_kg * COMMISSION_PER_KG_USD).quantize(_CENT)
+def suggest_commission(
+    weight_kg: Decimal, per_kg_usd: Decimal = COMMISSION_PER_KG_USD
+) -> Decimal:
+    return (weight_kg * per_kg_usd).quantize(_CENT)
 
 
 def is_overdue(status: OrderStatus, promised_date: date | None, today: date) -> bool:

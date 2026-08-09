@@ -10,6 +10,7 @@ from crm.application.interfaces.repositories import (
     OrderItemRepository,
     OrderRepository,
     PaymentRepository,
+    SettingsRepository,
     StatusHistoryRepository,
     TrackRepository,
 )
@@ -64,6 +65,7 @@ class OrderService:
         tracks: TrackRepository,
         payments: PaymentRepository,
         history: StatusHistoryRepository,
+        app_settings: SettingsRepository,
         uow: UnitOfWork,
     ) -> None:
         self._orders = orders
@@ -71,6 +73,7 @@ class OrderService:
         self._tracks = tracks
         self._payments = payments
         self._history = history
+        self._app_settings = app_settings
         self._uow = uow
 
     # ---------- чтение ----------
@@ -127,6 +130,16 @@ class OrderService:
             ):
                 raise DomainValidationError(
                     "У закрытого заказа комиссия обязательна: сначала переоткройте заказ"
+                )
+            # Фактический вес заполняет комиссию по тарифу, но только если её
+            # ещё нет и в этом же патче её не задали руками — ручная главнее.
+            if (
+                fields.get("weight_kg") is not None
+                and "commission_usd" not in fields
+                and order.commission_usd is None
+            ):
+                fields["commission_usd"] = rules.suggest_commission(
+                    fields["weight_kg"], await self._commission_per_kg()
                 )
             await self._orders.update_fields(order_id, fields)
         return await self.get_detail(order_id)
@@ -251,8 +264,9 @@ class OrderService:
                     "items": src.items,
                     "purchase_price_usd": src.purchase_price_usd,
                     "commission_usd": src.commission_usd,
-                    "weight_kg": src.weight_kg,
-                    "weight_is_final": False,
+                    # факт. вес принадлежит конкретной посылке — в перезаказ идёт только прогноз
+                    "weight_kg": None,
+                    "est_weight_kg": src.est_weight_kg,
                     "promised_date": src.promised_date,
                     "comment": src.comment,
                     "status": OrderStatus.PURCHASED,
@@ -361,6 +375,10 @@ class OrderService:
                 email_log_id=email_log_id,
             )
             return "advanced"
+
+    async def _commission_per_kg(self) -> Decimal:
+        raw = await self._app_settings.get("commission.per_kg_usd")
+        return rules.COMMISSION_PER_KG_USD if raw is None else Decimal(str(raw))
 
     async def _get_locked(self, order_id: int) -> Order:
         order = await self._orders.get(order_id, for_update=True)
