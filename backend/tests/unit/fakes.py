@@ -413,7 +413,7 @@ class FakeEmailRepository:
         )
         return entry.id
 
-    async def get(self, email_id: int) -> EmailLogEntry | None:
+    async def get(self, email_id: int, *, for_update: bool = False) -> EmailLogEntry | None:
         return self.storage.get(email_id)
 
     async def fetch_queue(self, *, now, limit) -> list[EmailLogEntry]:

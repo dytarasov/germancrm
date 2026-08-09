@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime
 
@@ -13,6 +14,8 @@ from crm.domain.exceptions import AuthenticationError
 from crm.presentation.auth import SESSION_COOKIE, require_auth
 from crm.presentation.ip import client_ip
 from crm.presentation.schemas.auth import LoginIn
+
+log = logging.getLogger("crm.auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRoute)
 
@@ -38,12 +41,14 @@ async def login(
     if bannable:
         until = await security.banned_until(ip)
         if until is not None:
+            log.warning("Вход отклонён: IP %s забанен до %s", ip, until.isoformat())
             raise HTTPException(status_code=429, detail=_ban_message(until))
 
     fails: list[float] = request.app.state.login_fails
     now = time.time()
     fails[:] = [t for t in fails if now - t < LOGIN_WINDOW_SEC]
     if len(fails) >= LOGIN_MAX_FAILS:
+        log.warning("Глобальный лимит логина исчерпан (ip=%s) — вход временно закрыт", ip)
         raise HTTPException(
             status_code=429,
             detail="Слишком много попыток входа — подождите 15 минут",
@@ -55,12 +60,20 @@ async def login(
         if bannable:
             ban = await security.register_fail(ip)
             if ban.banned_until is not None:
+                log.warning(
+                    "IP %s ЗАБАНЕН до %s: %s неверных паролей подряд",
+                    ip, ban.banned_until.isoformat(), ban.fails,
+                )
                 raise HTTPException(status_code=429, detail=_ban_message(ban.banned_until))
+            log.warning("Неверный пароль (ip=%s, промах %s/5)", ip, ban.fails)
+        else:
+            log.warning("Неверный пароль (ip=%s, вне зоны бана)", ip)
         raise AuthenticationError("Неверный пароль")
 
     fails.clear()
     if bannable:
         await security.clear(ip)
+    log.info("Успешный вход (ip=%s)", ip)
     response.set_cookie(
         SESSION_COOKIE,
         auth.issue_token(),
@@ -73,8 +86,9 @@ async def login(
 
 
 @router.post("/logout", status_code=204)
-async def logout(response: Response) -> None:
+async def logout(request: Request, response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/")
+    log.info("Выход из сессии (ip=%s)", client_ip(request)[0])
 
 
 @router.get("/me", status_code=204, dependencies=[Depends(require_auth)])

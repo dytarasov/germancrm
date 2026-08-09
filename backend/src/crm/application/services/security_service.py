@@ -7,11 +7,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from crm.application.interfaces.repositories import LoginBanRepository
 from crm.application.interfaces.uow import UnitOfWork
 from crm.domain.models import LoginBan
+
+log = logging.getLogger("crm.security")
 
 MAX_FAILS = 5
 BAN_HOURS = 48
@@ -49,6 +52,7 @@ class SecurityService:
     async def unban(self, ip: str) -> None:
         async with self._uow:
             await self._bans.clear(ip)
+        log.info("Бан IP %s снят вручную из CRM", ip)
 
 
 def _now() -> datetime:

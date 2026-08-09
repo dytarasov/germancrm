@@ -70,8 +70,13 @@ class PgEmailRepository:
             str(status),
         )
 
-    async def get(self, email_id: int) -> EmailLogEntry | None:
-        row = await self._conn.fetchrow("SELECT * FROM email_log WHERE id = $1", email_id)
+    async def get(self, email_id: int, *, for_update: bool = False) -> EmailLogEntry | None:
+        # for_update: row-lock письма на время транзакции — сериализует гонку
+        # «ручной разбор ↔ воркер» за одно и то же письмо (кто первый, тот и разбирает).
+        suffix = " FOR UPDATE" if for_update else ""
+        row = await self._conn.fetchrow(
+            f"SELECT * FROM email_log WHERE id = $1{suffix}", email_id
+        )
         return record_to_email_entry(row) if row else None
 
     async def fetch_queue(self, *, now: datetime, limit: int) -> list[EmailLogEntry]:

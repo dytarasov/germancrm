@@ -53,9 +53,16 @@ async def lifespan(app: FastAPI):
             run_mail_worker(container, stop, app.state.mail_wake), name="mail-worker"
         )
         worker_task.add_done_callback(log_if_crashed)
+    log.info(
+        "Приложение запущено: почтовый воркер %s, cookie_secure=%s, Gmail %s",
+        "включён" if settings.mail_worker_enabled else "выключен",
+        settings.cookie_secure,
+        "настроен" if settings.gmail_configured else "не настроен",
+    )
 
     yield
 
+    log.info("Остановка приложения")
     stop.set()
     if worker_task is not None:
         try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -32,6 +33,8 @@ from crm.domain.models import (
     StatusChange,
     Track,
 )
+
+log = logging.getLogger("crm.orders")
 
 AutoAdvanceOutcome = Literal["advanced", "stale", "terminal", "rejected", "not_found"]
 
@@ -113,6 +116,10 @@ class OrderService:
                 new_status=OrderStatus.PURCHASED,
                 source=StatusSource.MANUAL,
             )
+        log.info(
+            "Создан заказ #%s (клиент %s, магазин %s, $%s)",
+            order.id, order.client_id, order.store, order.purchase_price_usd,
+        )
         return await self.get_detail(order.id)
 
     async def update(self, order_id: int, fields: dict[str, Any]) -> OrderDetail:
@@ -141,6 +148,10 @@ class OrderService:
                 fields["commission_usd"] = rules.suggest_commission(
                     fields["weight_kg"], await self._commission_per_kg()
                 )
+                log.info(
+                    "Заказ #%s: комиссия $%s рассчитана от веса %s кг",
+                    order_id, fields["commission_usd"], fields["weight_kg"],
+                )
             await self._orders.update_fields(order_id, fields)
         return await self.get_detail(order_id)
 
@@ -164,6 +175,7 @@ class OrderService:
                         },
                     )
             await self._orders.delete(order_id)
+        log.info("Удалён заказ #%s (треки возвращены в очередь)", order_id)
 
     # ---------- статусы (руками) ----------
 
@@ -194,6 +206,10 @@ class OrderService:
                     source=StatusSource.MANUAL,
                     comment=comment,
                 )
+                log.info(
+                    "Заказ #%s: статус %s → %s (вручную)",
+                    order_id, order.status.value, new_status.value,
+                )
         return await self.get_detail(order_id)
 
     async def close(self, order_id: int) -> OrderDetail:
@@ -215,6 +231,7 @@ class OrderService:
                     source=StatusSource.MANUAL,
                     comment=comment,
                 )
+                log.info("Заказ #%s отменён (был %s)", order_id, order.status.value)
         return await self.get_detail(order_id)
 
     async def refund(
@@ -247,6 +264,10 @@ class OrderService:
                     old_status=order.status,
                     new_status=OrderStatus.REFUNDED,
                     source=StatusSource.MANUAL,
+                )
+                log.info(
+                    "Заказ #%s: возврат $%s (был %s)",
+                    order_id, refunded_amount_usd, order.status.value,
                 )
         return await self.get_detail(order_id)
 
@@ -373,6 +394,10 @@ class OrderService:
                 new_status=new_status,
                 source=source,
                 email_log_id=email_log_id,
+            )
+            log.info(
+                "Заказ #%s: статус %s → %s (%s, письмо #%s)",
+                order_id, order.status.value, new_status.value, source.value, email_log_id,
             )
             return "advanced"
 

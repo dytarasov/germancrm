@@ -198,6 +198,7 @@ class MailService:
             await self._gmail_state.update_sync_state(
                 {"history_id": None, "last_error": None, "consecutive_failures": 0}
             )
+        log.info("Gmail подключён: %s", profile.email)
         return profile.email
 
     # ---------------- Фаза A: ingest ----------------
@@ -421,8 +422,9 @@ class MailService:
             try:
                 async with self._uow:
                     # Пока ждали LLM, письмо могли разобрать вручную (resolve) —
-                    # не применяем второй раз.
-                    fresh = await self._emails.get(row.id)
+                    # не применяем второй раз. FOR UPDATE: если ручной разбор идёт
+                    # прямо сейчас, ждём его коммита и увидим уже финальный статус.
+                    fresh = await self._emails.get(row.id, for_update=True)
                     if fresh is None or fresh.processing_status not in (
                         EmailProcessingStatus.NEW,
                         EmailProcessingStatus.PENDING_LLM,
@@ -851,6 +853,15 @@ class MailService:
         numbers = [normalize_tracking_number(raw) for raw in tracking_numbers or []]
         numbers = [n for n in numbers if n]
         async with self._uow:
+            # Авторитетная перепроверка под row-lock: если воркер разобрал письмо,
+            # пока пользователь заполнял форму, повторно не применяем.
+            locked = await self._emails.get(email_id, for_update=True)
+            if locked is None:
+                raise NotFoundError.entity("Письмо", email_id)
+            if locked.processing_status == EmailProcessingStatus.PROCESSED:
+                raise ConflictError(
+                    "Письмо уже разобрано — повторный разбор задублирует события"
+                )
             for number in numbers:
                 existing = await self._tracks.get_by_number(number)
                 details: dict = {"tracking_number": number, "resolved_manually": True}
