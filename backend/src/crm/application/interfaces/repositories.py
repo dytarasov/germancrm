@@ -19,6 +19,7 @@ from crm.domain.models import (
     Flight,
     GmailCredentials,
     GmailSyncState,
+    LoginBan,
     MoneyReportOrderRow,
     MonthMoneyRow,
     Order,
@@ -266,3 +267,15 @@ class EmailRepository(Protocol):
     async def status_counts(self) -> dict[str, int]: ...
 
     async def requeue_filtered_domain(self, domain: str) -> int: ...
+
+
+class LoginBanRepository(Protocol):
+    async def get(self, ip: str) -> LoginBan | None: ...
+
+    async def register_fail(
+        self, ip: str, *, reset_window_min: int, max_fails: int, ban_hours: int
+    ) -> LoginBan: ...
+
+    async def clear(self, ip: str) -> None: ...
+
+    async def list_recent(self, limit: int = 50) -> list[LoginBan]: ...

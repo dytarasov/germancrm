@@ -20,6 +20,9 @@ services:
     env_file: .env
     environment:
       DATABASE_DSN: postgresql://crm:${POSTGRES_PASSWORD:-crm}@postgres:5432/crm
+      BACKUPS_DIR: /backups   # дампы сервиса backup — воркер выгружает их на Google Drive
+    volumes:
+      - ./backups:/backups:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"   # наружу — нужен для Gmail OAuth callback на localhost
     depends_on:

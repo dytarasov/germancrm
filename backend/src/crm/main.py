@@ -6,13 +6,16 @@ from contextlib import asynccontextmanager
 
 import asyncpg
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from crm.application.services.auth_service import AuthService
 from crm.di.container import make_container
 from crm.infrastructure.config import Settings
 from crm.infrastructure.db.migrations import MigrationRunner
 from crm.infrastructure.worker.mail_worker import log_if_crashed, run_mail_worker
+from crm.presentation.auth import require_auth
 from crm.presentation.errors import register_error_handlers
 from crm.presentation.routers import (
     auth,
@@ -25,6 +28,7 @@ from crm.presentation.routers import (
     payments,
     reports,
     search,
+    security,
     tracks,
 )
 from crm.presentation.routers import (
@@ -91,11 +95,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     _check_secrets(settings)
 
+    # docs/openapi закрыты за require_auth ниже — публично схему API не отдаём
     app = FastAPI(
         title="shaprivezu",
         lifespan=lifespan,
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
     app.state.settings = settings
     app.state.auth_service = AuthService(
@@ -124,9 +130,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         search.router,
         mail.router,
         settings_router.router,
+        security.router,
         health.router,
     ):
         app.include_router(router)
+
+    @app.get("/api/openapi.json", include_in_schema=False, dependencies=[Depends(require_auth)])
+    async def openapi_json() -> JSONResponse:
+        return JSONResponse(app.openapi())
+
+    @app.get("/api/docs", include_in_schema=False, dependencies=[Depends(require_auth)])
+    async def api_docs() -> HTMLResponse:
+        return get_swagger_ui_html(openapi_url="/api/openapi.json", title="shaprivezu — API")
 
     return app
 

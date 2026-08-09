@@ -46,6 +46,8 @@ async def run_mail_worker(
                         inserted = await mail.ingest_cycle()
                         stats = await mail.process_cycle()
                         refreshed = await mail.retro_match()
+                        # раз в сутки; сам no-op, если уже синхронизировано
+                        await mail.drive_backup_sync()
                         if inserted or stats.processed or stats.manual:
                             log.info(
                                 "Цикл почты: +%s писем, обработано %s, в разбор %s, "

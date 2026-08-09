@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
 
     migrations_dir: Path = _DEFAULT_MIGRATIONS_DIR
+    # Каталог с дампами pg_dump (маунт ./backups в docker) — для выгрузки на Google Drive
+    backups_dir: Path | None = None
 
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""

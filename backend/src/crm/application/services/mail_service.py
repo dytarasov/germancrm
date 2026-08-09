@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+from crm.application.interfaces.gdrive import DrivePort, DriveScopeError
 from crm.application.interfaces.gmail import (
     GmailAuthError,
     GmailHistoryExpiredError,
@@ -33,6 +35,7 @@ from crm.application.services.matching import MatcherService, normalize_number, 
 from crm.application.services.order_service import OrderService
 from crm.application.services.settings_service import DEFAULTS
 from crm.application.services.track_service import normalize_tracking_number
+from crm.domain.clock import business_today
 from crm.domain.enums import (
     EmailAction,
     EmailEventType,
@@ -55,6 +58,8 @@ log = logging.getLogger("crm.mail")
 
 MAX_EMAILS_PER_CYCLE = 50
 MAX_INGEST_PER_CYCLE = 200
+DRIVE_BACKUP_FOLDER = "shaprivezu-backups"
+DRIVE_BACKUP_KEEP = 60
 MAX_BACKFILL_MESSAGES = 1000
 POISON_AFTER_ATTEMPTS = 5
 RETRY_BACKOFF = [timedelta(minutes=5), timedelta(minutes=30), timedelta(hours=2), timedelta(hours=8)]
@@ -148,6 +153,8 @@ class MailService:
         uow: UnitOfWork,
         *,
         gmail_configured: bool,
+        drive: DrivePort | None = None,
+        backups_dir: Path | None = None,
     ) -> None:
         self._gmail = gmail
         self._gmail_state = gmail_state
@@ -160,6 +167,8 @@ class MailService:
         self._llm = llm
         self._uow = uow
         self._gmail_configured = gmail_configured
+        self._drive = drive
+        self._backups_dir = backups_dir
 
     # ---------------- OAuth ----------------
 
@@ -959,6 +968,49 @@ class MailService:
 
     async def consecutive_failures(self) -> int:
         return (await self._gmail_state.get_sync_state()).consecutive_failures
+
+    # ---------------- Оффсайт-бэкапы на Google Drive ----------------
+
+    async def drive_backup_sync(self) -> None:
+        """Раз в сутки заливает свежий дамп pg_dump на Google Drive аккаунта почты.
+
+        Никогда не ломает почтовый цикл: любые ошибки — только в лог.
+        Отметка об успехе ставится после загрузки, поэтому сбой повторится
+        на следующем цикле сам."""
+        if self._drive is None or self._backups_dir is None:
+            return
+        try:
+            creds = await self._gmail_state.get_credentials()
+            if creds is None or creds.revoked_at is not None:
+                return
+            today = business_today().isoformat()
+            if await self._settings.get("backup.gdrive_last_sync") == today:
+                return
+            dumps = sorted(self._backups_dir.glob("crm-*.sql"))
+            if not dumps:
+                return
+            newest = dumps[-1]
+            token = await self._access_token()
+            folder = await self._drive.ensure_folder(token, DRIVE_BACKUP_FOLDER)
+            remote = await self._drive.list_files(token, folder)
+            by_name = {f["name"]: f["id"] for f in remote}
+            if newest.name not in by_name:
+                await self._drive.upload(token, folder, newest.name, newest.read_bytes())
+                log.info("Оффсайт-бэкап: %s загружен на Google Drive", newest.name)
+            # Ротация на Drive: имена crm-ГГГГММДД-… сортируются хронологически.
+            names = sorted(set(by_name) | {newest.name})
+            for name in names[:-DRIVE_BACKUP_KEEP]:
+                if name in by_name:
+                    await self._drive.delete(token, by_name[name])
+            async with self._uow:
+                await self._settings.set_many({"backup.gdrive_last_sync": today})
+        except DriveScopeError:
+            log.warning(
+                "Оффсайт-бэкап: у токена нет прав Google Drive — переподключите "
+                "Gmail в настройках, чтобы выдать доступ"
+            )
+        except Exception:  # noqa: BLE001 — бэкап не должен ронять цикл
+            log.exception("Оффсайт-бэкап на Google Drive не удался")
 
     async def _allowed_domains(self) -> list[str]:
         whitelist = await self._setting("mail.whitelist_domains") or []

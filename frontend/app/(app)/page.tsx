@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import type { Dashboard, OrderListItem } from "@/lib/api-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, ApiError } from "@/lib/api";
+import type { Dashboard, LoginBan, OrderListItem } from "@/lib/api-types";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
-import { Card, EmptyState } from "@/components/ui";
+import { Button, Card, EmptyState } from "@/components/ui";
 import { NoCommissionBadge } from "@/components/status-badge";
 import { OrdersTable } from "@/components/orders-table";
+import { toastError, toastSaved } from "@/components/toasts";
 
 // Срочное сверху: просроченные, затем по ближайшему обещанному сроку, затем свежие.
 function byUrgency(a: OrderListItem, b: OrderListItem): number {
@@ -101,6 +102,58 @@ function MailBanners({ d }: { d: Dashboard }) {
   );
 }
 
+function SecurityBanners() {
+  const qc = useQueryClient();
+  const { data: bans } = useQuery({
+    queryKey: ["security-bans"],
+    queryFn: () => api.get<LoginBan[]>("/api/security/bans"),
+    refetchInterval: 60_000,
+  });
+  const unban = useMutation<void, ApiError, string>({
+    mutationFn: (ip) => api.del(`/api/security/bans/${ip}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["security-bans"] });
+      toastSaved(undefined, "Бан снят");
+    },
+    onError: (e) => toastError(e.message),
+  });
+
+  const rows = (bans ?? []).filter((b) => b.fails > 0);
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {rows.map((b) => {
+        const banned = b.banned_until !== null && new Date(b.banned_until) > new Date();
+        return (
+          <div
+            key={b.ip}
+            className={
+              "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3.5 py-2.5 text-[13px] font-medium " +
+              (banned
+                ? "border-red-500/30 bg-red-500/8 text-red-700 dark:text-red-400"
+                : "border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-400")
+            }
+          >
+            <span className="min-w-0">
+              {banned
+                ? `Попытка взлома: IP ${b.ip} перебирал пароль (${b.fails} промахов) — забанен до ${fmtDateTime(b.banned_until)}`
+                : `С IP ${b.ip} было ${b.fails} неверных паролей (${fmtDateTime(b.last_fail_at)})`}
+            </span>
+            <Button
+              variant="ghost"
+              className="ml-auto h-7 shrink-0"
+              onClick={() => unban.mutate(b.ip)}
+              disabled={unban.isPending}
+            >
+              {banned ? "Снять бан" : "Сбросить счётчик"}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
@@ -127,6 +180,7 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <h1 className="text-[17px] font-semibold tracking-tight">Дашборд</h1>
 
+      <SecurityBanners />
       <MailBanners d={data} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

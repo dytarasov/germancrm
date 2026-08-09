@@ -28,7 +28,11 @@ from crm.domain.models import EmailMessage
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
-SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+# drive.file — для оффсайт-бэкапов: приложение видит на Drive только свои файлы
+SCOPE = (
+    "https://www.googleapis.com/auth/gmail.readonly "
+    "https://www.googleapis.com/auth/drive.file"
+)
 
 BODY_TEXT_LIMIT = 15_000
 _TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)

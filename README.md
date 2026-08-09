@@ -18,7 +18,7 @@ make up          # соберёт и поднимет postgres + backend + front
 
 ## Почта (Gmail) — включается позже, CRM работает и без неё
 
-1. В [Google Cloud Console](https://console.cloud.google.com/) создайте проект → включите **Gmail API** (APIs & Services → Library).
+1. В [Google Cloud Console](https://console.cloud.google.com/) создайте проект → включите **Gmail API** и **Google Drive API** (APIs & Services → Library; Drive нужен для оффсайт-бэкапов).
 2. **Важно:** на экране OAuth consent переведите приложение из Testing в **Production** (кнопка Publish app; верификацию проходить не нужно). В статусе Testing refresh token живёт всего 7 дней.
 3. Credentials → Create credentials → OAuth client ID:
    - для прода — тип **Web application**, Authorized redirect URI: `https://shaprivezu.com/api/mail/oauth/callback` (точно совпадает с `PUBLIC_BASE_URL` + `/api/mail/oauth/callback`);
@@ -41,6 +41,12 @@ make backup      # pg_dump в ./backups/crm-ГГГГММДД-ЧЧММСС.sql
 ```
 
 Восстановление: `cat backups/crm-... .sql | docker compose exec -T postgres psql -U crm crm`.
+
+Оффсайт-копия: воркер раз в сутки заливает свежий дамп в папку `shaprivezu-backups` на Google Drive того же аккаунта, что подключён к почте (scope `drive.file` — приложение видит только свои файлы; на Drive хранится 60 копий). Если Gmail подключался до появления этой функции — нажмите «Подключить Gmail» ещё раз, чтобы выдать токену доступ к Drive.
+
+## Безопасность входа
+
+5 неверных паролей с одного IP — бан на 48 часов (счётчик копится, пока промахи идут чаще раза в час; успешный вход его стирает). Активные баны и попытки перебора видны на дашборде — там же кнопка «Снять бан». Аварийно снять бан без входа в CRM: `docker compose exec postgres psql -U crm crm -c "DELETE FROM login_bans"`. Реальный IP за haproxy+Caddy приходит через PROXY protocol (`deploy/haproxy.cfg: send-proxy-v2` + `listener_wrappers proxy_protocol` в Caddyfile) — если цепочка его не передала, персональные баны выключаются сами (остаётся общий лимит 10 попыток / 15 минут), чтобы не забанить всех разом. `/api/docs` и `/api/openapi.json` доступны только после входа.
 
 ## Тесты
 

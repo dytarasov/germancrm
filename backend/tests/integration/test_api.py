@@ -36,9 +36,67 @@ async def test_healthz_open(api):
     assert resp.status_code == 200
 
 
-async def test_openapi_schema_generates(api):
+async def test_login_ban_after_5_fails_from_one_ip(api):
+    evil = {"X-Forwarded-For": "5.6.7.8"}
+    for _ in range(4):
+        resp = await api.post("/api/auth/login", json={"password": "nope"}, headers=evil)
+        assert resp.status_code == 401
+    # пятый промах — бан на 48 часов
+    resp = await api.post("/api/auth/login", json={"password": "nope"}, headers=evil)
+    assert resp.status_code == 429
+    assert "заблокирован" in resp.json()["error"]["message"]
+    # даже верный пароль с забаненного IP не пускаем
+    resp = await api.post("/api/auth/login", json={"password": "test-pass"}, headers=evil)
+    assert resp.status_code == 429
+    # другой IP живёт своей жизнью
+    resp = await api.post(
+        "/api/auth/login",
+        json={"password": "test-pass"},
+        headers={"X-Forwarded-For": "8.8.4.4"},
+    )
+    assert resp.status_code == 204
+
+
+async def test_ban_listed_and_removable_in_crm(api):
+    evil = {"X-Forwarded-For": "5.6.7.8"}
+    for _ in range(5):
+        await api.post("/api/auth/login", json={"password": "nope"}, headers=evil)
+    # владелец заходит со своего IP и видит атаку
+    resp = await api.post("/api/auth/login", json={"password": "test-pass"})
+    assert resp.status_code == 204
+    resp = await api.get("/api/security/bans")
+    assert resp.status_code == 200
+    bans = resp.json()
+    row = next(b for b in bans if b["ip"] == "5.6.7.8")
+    assert row["fails"] == 5
+    assert row["banned_until"] is not None
+    # снимает бан — IP снова может логиниться
+    resp = await api.delete("/api/security/bans/5.6.7.8")
+    assert resp.status_code == 204
+    resp = await api.post("/api/auth/login", json={"password": "test-pass"}, headers=evil)
+    assert resp.status_code == 204
+
+
+async def test_successful_login_resets_fail_counter(api):
+    ip = {"X-Forwarded-For": "5.6.7.8"}
+    for _ in range(4):
+        await api.post("/api/auth/login", json={"password": "nope"}, headers=ip)
+    resp = await api.post("/api/auth/login", json={"password": "test-pass"}, headers=ip)
+    assert resp.status_code == 204
+    # счётчик стёрт: новые 4 промаха — ещё не бан
+    for _ in range(4):
+        resp = await api.post("/api/auth/login", json={"password": "nope"}, headers=ip)
+    assert resp.status_code == 401
+
+
+async def test_docs_closed_without_auth(api):
+    assert (await api.get("/api/openapi.json")).status_code == 401
+    assert (await api.get("/api/docs")).status_code == 401
+
+
+async def test_openapi_schema_generates(authed):
     """Регрессия: аннотация RedirectResponse в oauth_callback роняла генерацию схемы."""
-    resp = await api.get("/api/openapi.json")
+    resp = await authed.get("/api/openapi.json")
     assert resp.status_code == 200
     assert resp.json()["info"]["title"] == "shaprivezu"
 

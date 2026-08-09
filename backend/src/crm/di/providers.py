@@ -6,6 +6,7 @@ import asyncpg
 import httpx
 from dishka import Provider, Scope, provide
 
+from crm.application.interfaces.gdrive import DrivePort
 from crm.application.interfaces.gmail import GmailPort
 from crm.application.interfaces.llm import LLMExtractor
 from crm.application.interfaces.repositories import (
@@ -14,6 +15,7 @@ from crm.application.interfaces.repositories import (
     EmailRepository,
     FlightRepository,
     GmailStateRepository,
+    LoginBanRepository,
     OrderItemRepository,
     OrderRepository,
     PaymentRepository,
@@ -32,11 +34,13 @@ from crm.application.services.matching import MatcherService
 from crm.application.services.order_service import OrderService
 from crm.application.services.payment_service import PaymentService
 from crm.application.services.report_service import ReportService
+from crm.application.services.security_service import SecurityService
 from crm.application.services.settings_service import SettingsService
 from crm.application.services.track_service import TrackService
 from crm.infrastructure.config import Settings
 from crm.infrastructure.db.pool import create_pool
 from crm.infrastructure.db.uow import AsyncpgUnitOfWork
+from crm.infrastructure.gdrive.client import GoogleDriveClient
 from crm.infrastructure.gmail.client import GmailApiClient
 from crm.infrastructure.llm.client import NullLLM, OpenRouterLLM
 from crm.infrastructure.repositories.client_repo import PgClientRepository
@@ -44,6 +48,7 @@ from crm.infrastructure.repositories.dashboard_repo import PgDashboardRepository
 from crm.infrastructure.repositories.email_repo import PgEmailRepository
 from crm.infrastructure.repositories.flight_repo import PgFlightRepository
 from crm.infrastructure.repositories.gmail_state_repo import PgGmailStateRepository
+from crm.infrastructure.repositories.login_ban_repo import PgLoginBanRepository
 from crm.infrastructure.repositories.order_item_repo import PgOrderItemRepository
 from crm.infrastructure.repositories.order_repo import PgOrderRepository
 from crm.infrastructure.repositories.payment_repo import PgPaymentRepository
@@ -96,6 +101,10 @@ class AppProvider(Provider):
             redirect_uri=f"{settings.public_base_url}/api/mail/oauth/callback",
         )
 
+    @provide
+    def drive(self, http: httpx.AsyncClient) -> DrivePort:
+        return GoogleDriveClient(http)
+
 
 class RequestProvider(Provider):
     scope = Scope.REQUEST
@@ -119,6 +128,7 @@ class RequestProvider(Provider):
     settings_repo = provide(PgSettingsRepository, provides=SettingsRepository)
     gmail_state = provide(PgGmailStateRepository, provides=GmailStateRepository)
     emails = provide(PgEmailRepository, provides=EmailRepository)
+    login_bans = provide(PgLoginBanRepository, provides=LoginBanRepository)
 
     client_service = provide(ClientService)
     order_service = provide(OrderService)
@@ -128,6 +138,7 @@ class RequestProvider(Provider):
     dashboard_service = provide(DashboardService)
     report_service = provide(ReportService)
     settings_service = provide(SettingsService)
+    security_service = provide(SecurityService)
 
     @provide
     def llm(
@@ -159,6 +170,7 @@ class RequestProvider(Provider):
         llm: LLMExtractor,
         uow: UnitOfWork,
         settings: Settings,
+        drive: DrivePort,
     ) -> MailService:
         return MailService(
             gmail,
@@ -172,4 +184,6 @@ class RequestProvider(Provider):
             llm,
             uow,
             gmail_configured=settings.gmail_configured,
+            drive=drive,
+            backups_dir=settings.backups_dir,
         )

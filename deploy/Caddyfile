@@ -1,8 +1,31 @@
 # TLS-терминация для прода: Let's Encrypt получается и продлевается автоматически.
 # Домен берётся из env DOMAIN (задаётся в .env, по умолчанию shaprivezu.com).
+
+# 443 приходит через haproxy (SNI-развилка) с PROXY protocol — из него Caddy
+# узнаёт реальный IP клиента и кладёт его в X-Forwarded-For (нужно банам входа).
+{
+	servers :443 {
+		listener_wrappers {
+			proxy_protocol {
+				allow 127.0.0.1/32 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+			}
+			tls
+		}
+	}
+}
+
 {$DOMAIN:shaprivezu.com} {
 	encode gzip
-	reverse_proxy frontend:3000
+	# API — напрямую в backend, минуя Next: меньше хопов и честный X-Forwarded-For
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /healthz {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
 }
 
 # Явный редирект http→https (catch-all ниже перехватил бы его).
