@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebounced } from "@/lib/use-debounced";
@@ -123,6 +123,13 @@ export default function TracksPage() {
   const [search, setSearch] = useState("");
   const [num, setNum] = useState("");
   const [carrier, setCarrier] = useState("");
+
+  // переход из ленты почты: /tracks?search=<номер> сразу фильтрует список
+  // (window вместо useSearchParams — без Suspense-обёртки для статической страницы)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("search");
+    if (q) setSearch(q);
+  }, []);
 
   const { data: open } = useQuery({
     queryKey: ["tracks", "open"],

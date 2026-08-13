@@ -47,6 +47,8 @@ class MailEventOut(BaseModel):
     order_label: str | None
     subject: str | None
     from_addr: str | None
+    # для перехода из ленты к треку, когда заказа у события нет
+    tracking_number: str | None
 
 
 class MailReviewOut(BaseModel):

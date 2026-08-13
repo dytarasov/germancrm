@@ -35,6 +35,9 @@ SCOPE = (
 )
 
 BODY_TEXT_LIMIT = 15_000
+# Треки часто живут только в href — блоку ссылок гарантируется место в лимите,
+# иначе длинное маркетинговое письмо вытеснит его за срез BODY_TEXT_LIMIT.
+LINKS_BLOCK_LIMIT = 5_000
 _TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
 
 
@@ -215,8 +218,22 @@ def parse_gmail_message(data: dict) -> EmailMessage:
         body_text = "\n".join(plain_parts)
     else:
         body_text, _ = _html_to_text("\n".join(html_parts))
+
+    # Блок ссылок собираем в свой лимит и НЕ даём длинному телу вытеснить его
+    # за общий срез: обрезается основной текст, ссылки сохраняются целиком.
+    links_block = ""
     if links:
-        body_text = f"{body_text}\n\nСсылки из письма:\n" + "\n".join(links[:50])
+        joined: list[str] = []
+        used = 0
+        for href in links:
+            if used + len(href) + 1 > LINKS_BLOCK_LIMIT:
+                break
+            joined.append(href)
+            used += len(href) + 1
+        if joined:
+            links_block = "\n\nСсылки из письма:\n" + "\n".join(joined)
+    if body_text or links_block:
+        body_text = body_text[: BODY_TEXT_LIMIT - len(links_block)] + links_block
 
     return EmailMessage(
         gmail_message_id=data["id"],
@@ -227,7 +244,7 @@ def parse_gmail_message(data: dict) -> EmailMessage:
         subject=headers.get("subject"),
         sent_at=sent_at,
         snippet=data.get("snippet"),
-        body_text=body_text[:BODY_TEXT_LIMIT] if body_text else None,
+        body_text=body_text or None,
     )
 
 

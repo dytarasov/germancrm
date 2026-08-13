@@ -855,13 +855,35 @@ function SubordersSection({
             <div
               key={s.id}
               className={cx(
-                "flex flex-wrap items-center gap-2 rounded-md border border-line p-2",
+                "space-y-2 rounded-md border border-line p-2.5",
                 s.status === "cancelled" && "opacity-60",
               )}
             >
-              <span className="w-6 shrink-0 text-center text-[12px] text-muted">{i + 1}.</span>
+              {/* шапка строки: номер по порядку, статус, действия */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-medium text-muted">Подзаказ {i + 1}</span>
+                {(multi || orderTerminal) && <StatusBadge status={s.status} />}
+                {subTracks.length > 0 && (
+                  <span className="min-w-0 truncate text-[12px] text-muted">
+                    {subTracks.map((t) => (
+                      <span key={t.id} className="mr-1.5 font-mono text-[11.5px]">
+                        {t.tracking_number}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {multi && !orderTerminal && (
+                  <Button
+                    variant="ghost"
+                    className="ml-auto h-7"
+                    onClick={() => remove(s)}
+                  >
+                    Удалить
+                  </Button>
+                )}
+              </div>
               {orderTerminal ? (
-                <>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-0.5">
                   <span className="font-mono text-[13px]">
                     {s.store_order_number ?? "нет номера"}
                   </span>
@@ -870,10 +892,9 @@ function SubordersSection({
                       {fmtMoney(s.amount_usd)}
                     </span>
                   )}
-                  <StatusBadge status={s.status} />
-                </>
+                </div>
               ) : (
-                <>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <InlineField
                     label="Номер заказа"
                     value={s.store_order_number}
@@ -900,41 +921,21 @@ function SubordersSection({
                       )
                     }
                   />
-                </>
+                </div>
               )}
               {multi && !orderTerminal && (
                 <div>
                   <div className="mb-0.5 px-2 text-[11.5px] font-medium text-muted">Статус</div>
-                  <div className="flex items-center gap-2">
-                    <SelectBox
-                      value={s.status}
-                      onChange={(v) => setSubStatus(s, v as OrderStatus)}
-                      options={SUB_STATUSES.map((st) => ({
-                        value: st,
-                        label: STATUS_LABEL[st],
-                      }))}
-                    />
-                    <StatusBadge status={s.status} />
-                  </div>
+                  <SelectBox
+                    className="w-full sm:w-56"
+                    value={s.status}
+                    onChange={(v) => setSubStatus(s, v as OrderStatus)}
+                    options={SUB_STATUSES.map((st) => ({
+                      value: st,
+                      label: STATUS_LABEL[st],
+                    }))}
+                  />
                 </div>
-              )}
-              {subTracks.length > 0 && (
-                <span className="text-[12px] text-muted">
-                  {subTracks.map((t) => (
-                    <span key={t.id} className="mr-1.5 font-mono text-[11.5px]">
-                      {t.tracking_number}
-                    </span>
-                  ))}
-                </span>
-              )}
-              {multi && !orderTerminal && (
-                <Button
-                  variant="ghost"
-                  className="ml-auto h-7"
-                  onClick={() => remove(s)}
-                >
-                  Удалить
-                </Button>
               )}
             </div>
           );

@@ -57,10 +57,24 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [items, setItems] = useState("");
   const [links, setLinks] = useState("");
   const [price, setPrice] = useState("");
+  const [total, setTotal] = useState(""); // полная стоимость = закупка + комиссия
   const [commission, setCommission] = useState("");
   const [estWeight, setEstWeight] = useState("");
   const [promised, setPromised] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Полная стоимость + закупка → финальная комиссия (ручная комиссия главнее).
+  const priceNum = parseFloat(price.replace(",", "."));
+  const totalNum = parseFloat(total.replace(",", "."));
+  const totalCommission =
+    commission.trim() === "" &&
+    Number.isFinite(totalNum) &&
+    Number.isFinite(priceNum) &&
+    totalNum >= priceNum
+      ? (totalNum - priceNum).toFixed(2)
+      : null;
+  const totalInvalid =
+    total.trim() !== "" && Number.isFinite(totalNum) && Number.isFinite(priceNum) && totalNum < priceNum;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -94,7 +108,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             : undefined,
         items: items.trim(),
         purchase_price_usd: price.trim(),
-        commission_usd: commission.trim() || undefined,
+        commission_usd: commission.trim() || totalCommission || undefined,
         est_weight_kg: estWeight.trim().replace(",", ".") || undefined,
         promised_date: promised || null,
         links: linkList.length > 0 ? linkList : undefined,
@@ -109,7 +123,11 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
   };
 
   const valid =
-    (newClient ? clientName.trim() : clientId) && store.trim() && items.trim() && price.trim();
+    (newClient ? clientName.trim() : clientId) &&
+    store.trim() &&
+    items.trim() &&
+    price.trim() &&
+    !totalInvalid;
 
   // Прогноз комиссии от предполагаемого веса — ориентир, в БД не пишется.
   const tariff = settings?.commission_per_kg_usd ?? 50;
@@ -154,27 +172,18 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             </div>
           )}
         </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Магазин">
-            <Input placeholder="Amazon" value={store} onChange={(e) => setStore(e.target.value)} />
-          </Field>
-          <Field label="Цена закупки, $">
-            <Input
-              placeholder="0.00"
-              inputMode="decimal"
-              className="font-mono"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </Field>
-        </div>
+        <Field label="Магазин">
+          <Input placeholder="Amazon" value={store} onChange={(e) => setStore(e.target.value)} />
+        </Field>
         <Field label="Номера заказов магазина (можно позже; несколько, если корзина разбилась)">
           <div className="space-y-2">
             {subs.map((s, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="flex flex-wrap gap-2">
+                {/* на телефоне длинный моноширинный номер занимает всю строку,
+                    сумма и «×» уходят на вторую; на sm+ всё в одну строку */}
                 <Input
                   placeholder="111-2345678-1234567"
-                  className="min-w-0 flex-1 font-mono"
+                  className="w-full font-mono sm:min-w-0 sm:flex-1"
                   value={s.number}
                   onChange={(e) =>
                     setSubs(subs.map((x, j) => (j === i ? { ...x, number: e.target.value } : x)))
@@ -183,7 +192,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                 <Input
                   placeholder="сумма $"
                   inputMode="decimal"
-                  className="w-24 font-mono"
+                  className="min-w-0 flex-1 font-mono sm:w-24 sm:flex-none"
                   value={s.amount}
                   onChange={(e) =>
                     setSubs(subs.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
@@ -223,10 +232,29 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             onChange={(e) => setItems(e.target.value)}
           />
         </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Комиссия, $ (можно позже)">
+        {/* Деньги — одной сеткой 2×2 */}
+        <div className="grid grid-cols-2 gap-3 rounded-md border border-line p-3">
+          <Field label="Цена закупки, $">
             <Input
               placeholder="0.00"
+              inputMode="decimal"
+              className="font-mono"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </Field>
+          <Field label="Полная стоимость, $">
+            <Input
+              placeholder="закупка + комиссия"
+              inputMode="decimal"
+              className="font-mono"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+            />
+          </Field>
+          <Field label="Комиссия, $ (можно позже)">
+            <Input
+              placeholder={totalCommission ?? "0.00"}
               inputMode="decimal"
               className="font-mono"
               value={commission}
@@ -242,10 +270,21 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
               onChange={(e) => setEstWeight(e.target.value)}
             />
           </Field>
+          {totalInvalid && (
+            <p className="col-span-2 text-[12px] text-red-600 dark:text-red-400">
+              Полная стоимость меньше закупки — комиссия вышла бы отрицательной.
+            </p>
+          )}
+          {totalCommission && (
+            <p className="col-span-2 text-[12px] text-muted">
+              Комиссия ${totalCommission} = полная стоимость − закупка. Это финальная комиссия —
+              с ней заказ можно закрывать.
+            </p>
+          )}
+          {estCommissionHint && !totalCommission && (
+            <p className="col-span-2 text-[12px] text-muted">{estCommissionHint}</p>
+          )}
         </div>
-        {estCommissionHint && (
-          <p className="text-[12px] text-muted">{estCommissionHint}</p>
-        )}
         <Field label="Ссылки на товар (по одной на строку, необязательно)">
           <Textarea
             rows={3}

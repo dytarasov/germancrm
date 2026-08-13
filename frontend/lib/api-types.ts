@@ -231,6 +231,7 @@ export interface MailEvent {
   order_label: string | null;
   subject: string | null;
   from_addr: string | null;
+  tracking_number: string | null;
 }
 
 export interface EmailRow {

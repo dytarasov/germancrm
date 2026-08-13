@@ -348,6 +348,14 @@ function EmailPanel({
                     {ev.order_label ?? `заказ #${ev.order_id}`}
                   </Link>
                 )}
+                {!ev.order_id && ev.tracking_number && (
+                  <Link
+                    href={`/tracks?search=${encodeURIComponent(ev.tracking_number)}`}
+                    className="font-mono text-[12px] text-accent hover:underline"
+                  >
+                    трек {ev.tracking_number}
+                  </Link>
+                )}
               </div>
             ))
           )}
@@ -754,6 +762,14 @@ export default function MailPage() {
                         className="ml-1.5 text-accent hover:underline"
                       >
                         {ev.order_label ?? `заказ #${ev.order_id}`}
+                      </Link>
+                    )}
+                    {!ev.order_id && ev.tracking_number && (
+                      <Link
+                        href={`/tracks?search=${encodeURIComponent(ev.tracking_number)}`}
+                        className="ml-1.5 font-mono text-[12px] text-accent hover:underline"
+                      >
+                        трек {ev.tracking_number}
                       </Link>
                     )}
                   </span>

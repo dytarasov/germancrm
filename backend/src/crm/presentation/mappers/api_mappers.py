@@ -289,6 +289,7 @@ def mail_event_to_out(e: EmailEventRow) -> MailEventOut:
         order_label=e.order_label,
         subject=e.subject,
         from_addr=e.from_addr,
+        tracking_number=details.get("tracking_number"),
     )
 
 
