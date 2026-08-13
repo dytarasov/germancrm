@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { api } from "@/lib/api";
+import {
+  applyTheme,
+  getThemeServerSnapshot,
+  getThemeSnapshot,
+  setThemePref,
+  subscribeTheme,
+  type ThemePref,
+} from "@/lib/theme";
 import { cx } from "./ui";
 
 const NAV = [
@@ -36,6 +44,57 @@ function Icon({ d, className }: { d: string; className?: string }) {
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+const THEME_ORDER: ThemePref[] = ["system", "light", "dark"];
+const THEME_META: Record<ThemePref, { label: string; icon: string }> = {
+  system: { label: "Тема: системная", icon: "M4 4h16v12H4zM8 20h8M12 16v4" },
+  light: {
+    label: "Тема: светлая",
+    icon: "M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+  },
+  dark: { label: "Тема: тёмная", icon: "M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" },
+};
+
+/** Тумблер темы: системная → светлая → тёмная (по кругу).
+ *
+ * Экземпляров два (сайдбар + мобильное меню), поэтому состояние читается из
+ * общего стора, а не из локального useState — иначе второй тумблер остался бы
+ * со стейл-значением и его подписка на системную тему перебивала бы явный выбор. */
+function ThemeToggle({ mobile }: { mobile?: boolean }) {
+  const pref = useSyncExternalStore(
+    subscribeTheme,
+    getThemeSnapshot,
+    getThemeServerSnapshot,
+  );
+
+  // системная тема сменилась на лету — переприменяем, если выбрана «системная»
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const h = () => {
+      if (getThemeSnapshot() === "system") applyTheme("system");
+    };
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+
+  const cycle = () =>
+    setThemePref(THEME_ORDER[(THEME_ORDER.indexOf(pref) + 1) % THEME_ORDER.length]);
+
+  const meta = THEME_META[pref];
+  return (
+    <button
+      onClick={cycle}
+      title="Переключить тему"
+      className={cx(
+        "flex w-full items-center rounded-md text-muted transition-colors hover:bg-surface2 hover:text-ink",
+        mobile ? "h-11 gap-3 px-3 text-[14px]" : "h-8.5 gap-2.5 px-2.5 text-[13px]",
+      )}
+    >
+      <Icon d={meta.icon} className={mobile ? "size-4.5" : undefined} />
+      {meta.label}
+    </button>
+  );
 }
 
 async function logout() {
@@ -96,6 +155,7 @@ export function Sidebar() {
             ⌘K
           </kbd>
         </button>
+        <ThemeToggle />
         <button
           onClick={logout}
           className="flex h-8.5 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] text-muted transition-colors hover:bg-surface2 hover:text-ink"
@@ -171,7 +231,8 @@ export function MobileNav() {
                 </Link>
               ))}
             </div>
-            <div className="border-t border-line p-2">
+            <div className="space-y-1 border-t border-line p-2">
+              <ThemeToggle mobile />
               <button
                 onClick={logout}
                 className="flex h-11 w-full items-center gap-3 rounded-md px-3 text-[14px] text-muted transition-colors hover:bg-surface2 hover:text-ink"

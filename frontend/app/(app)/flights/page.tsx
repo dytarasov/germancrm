@@ -1,15 +1,90 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Flight, FlightDetail } from "@/lib/api-types";
 import { fmtDateFull, fmtMoney, isoToday } from "@/lib/format";
-import { Button, Card, EmptyState, Input, Section } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, Section } from "@/components/ui";
 import { DatePicker } from "@/components/date-picker";
 import { OrdersTable } from "@/components/orders-table";
 import { toastError, toastSaved } from "@/components/toasts";
 import { cx } from "@/components/ui";
+
+function EditFlightModal({ flight, onClose }: { flight: Flight | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [date, setDate] = useState(isoToday());
+  const [cost, setCost] = useState("");
+  const [desc, setDesc] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // При каждом открытии заполняем форму текущими значениями рейса.
+  useEffect(() => {
+    if (flight) {
+      setDate(flight.departed_on);
+      setCost(flight.cost_usd);
+      setDesc(flight.description ?? "");
+    }
+  }, [flight]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!flight) return;
+    setBusy(true);
+    api
+      .patch<Flight>(`/api/flights/${flight.id}`, {
+        departed_on: date,
+        cost_usd: cost.trim(),
+        description: desc.trim() || null,
+      })
+      .then(() => {
+        toastSaved(undefined, "Рейс обновлён");
+        qc.invalidateQueries({ queryKey: ["flights"] });
+        qc.invalidateQueries({ queryKey: ["flight", flight.id] });
+        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["money"] });
+        onClose();
+      })
+      .catch((err) => toastError(err.message))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Modal open={flight !== null} onClose={onClose} title="Изменить рейс">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Дата вылета">
+            <DatePicker className="w-full" value={date} onChange={(v) => setDate(v ?? isoToday())} />
+          </Field>
+          <Field label="Стоимость, $">
+            <Input
+              className="font-mono"
+              placeholder="0.00"
+              inputMode="decimal"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Field label="Описание">
+          <Input
+            placeholder="партия №, вес, примечание…"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
+        </Field>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button type="submit" variant="primary" disabled={!cost.trim() || busy}>
+            {busy ? "Сохраняю…" : "Сохранить"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 export default function FlightsPage() {
   const qc = useQueryClient();
@@ -17,6 +92,7 @@ export default function FlightsPage() {
   const [cost, setCost] = useState("");
   const [desc, setDesc] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Flight | null>(null);
 
   const { data: flights, isLoading } = useQuery({
     queryKey: ["flights"],
@@ -140,7 +216,17 @@ export default function FlightsPage() {
                   </td>
                   <td className="px-3 py-2.5 text-[13px] text-muted">{f.description ?? "—"}</td>
                   <td className="px-3 py-2.5 text-right text-[13px] tnum">{f.orders_count ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    <Button
+                      variant="ghost"
+                      className="h-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(f);
+                      }}
+                    >
+                      Изменить
+                    </Button>
                     <Button
                       variant="ghost"
                       className="h-7"
@@ -171,6 +257,8 @@ export default function FlightsPage() {
           )}
         </Section>
       )}
+
+      <EditFlightModal flight={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

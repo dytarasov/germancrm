@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -48,7 +48,6 @@ class Order:
     id: int
     client_id: int
     store: str
-    store_order_number: str | None
     items: str
     purchase_price_usd: Decimal
     commission_usd: Decimal | None  # None = «ещё не знаю», 0 = «без наценки»
@@ -63,6 +62,20 @@ class Order:
     copied_from: int | None
     purchased_on: date
     closed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Suborder:
+    """Подзаказ: заказ магазина внутри корзины — номер, справочная сумма и
+    собственный статус физического пути. Деньги живут на заказе-корзине."""
+
+    id: int
+    order_id: int
+    store_order_number: str | None
+    amount_usd: Decimal | None
+    status: OrderStatus
     created_at: datetime
     updated_at: datetime
 
@@ -88,6 +101,9 @@ class OrderListRow:
     client_name: str
     paid_usd: Decimal
     tracks_count: int
+    suborders_count: int = 1
+    # номера заказов магазина по всем подзаказам (без NULL), в порядке создания
+    order_numbers: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +127,7 @@ class Track:
     tracking_number: str
     carrier: str | None
     order_id: int | None
+    suborder_id: int | None
     source: TrackSource
     email_log_id: int | None
     match_status: TrackMatchStatus
@@ -152,6 +169,7 @@ class StatusChange:
     email_log_id: int | None
     comment: str | None
     changed_at: datetime
+    suborder_id: int | None = None  # смена уровня подзаказа
 
 
 # ---------- Почтовая подсистема ----------

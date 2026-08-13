@@ -10,6 +10,29 @@ from crm.presentation.schemas.payments import PaymentOut
 from crm.presentation.schemas.tracks import TrackOut
 
 
+class SuborderIn(BaseModel):
+    store_order_number: str | None = None
+    amount_usd: Decimal | None = Field(default=None, ge=0)
+
+
+class SuborderUpdate(BaseModel):
+    store_order_number: str | None = None
+    amount_usd: Decimal | None = Field(default=None, ge=0)
+
+
+class SuborderStatusIn(BaseModel):
+    status: OrderStatus
+    comment: str | None = None
+
+
+class SuborderOut(BaseModel):
+    id: int
+    order_id: int
+    store_order_number: str | None
+    amount_usd: Decimal | None
+    status: str
+
+
 class OrderCreate(BaseModel):
     client_id: int
     store: str = Field(min_length=1)
@@ -20,7 +43,10 @@ class OrderCreate(BaseModel):
     est_weight_kg: Decimal | None = Field(default=None, ge=0)
     promised_date: date | None = None
     comment: str | None = None
+    # старый одиночный номер (совместимость) — станет единственным подзаказом
     store_order_number: str | None = None
+    # подзаказы корзины: номер + справочная сумма; пусто = один подзаказ
+    suborders: list[SuborderIn] = Field(default_factory=list, max_length=20)
     flight_id: int | None = None
     purchased_on: date | None = None
     # ссылки на товары: каждая станет позицией заказа
@@ -90,6 +116,7 @@ class StatusChangeOut(BaseModel):
     source: str
     comment: str | None
     changed_at: datetime
+    suborder_id: int | None = None
 
 
 class OrderListItemOut(BaseModel):
@@ -97,7 +124,9 @@ class OrderListItemOut(BaseModel):
     client_id: int
     client_name: str
     store: str
+    # первый номер подзаказа — для строки списка
     store_order_number: str | None
+    suborders_count: int
     items: str
     status: str
     purchase_price_usd: Decimal
@@ -121,6 +150,7 @@ class OrderDetailOut(OrderListItemOut):
     closed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    suborders: list[SuborderOut]
     tracks: list[TrackOut]
     payments: list[PaymentOut]
     history: list[StatusChangeOut]

@@ -7,20 +7,27 @@ from crm.domain.models import OrderListRow
 from tests.unit.fakes import TODAY, make_order
 
 
-def row(order, client_name="Иванов", tracks_count=0) -> OrderListRow:
+def row(order, client_name="Иванов", tracks_count=0, order_numbers=None) -> OrderListRow:
     return OrderListRow(
-        order=order, client_name=client_name, paid_usd=Decimal("0"), tracks_count=tracks_count
+        order=order,
+        client_name=client_name,
+        paid_usd=Decimal("0"),
+        tracks_count=tracks_count,
+        suborders_count=1,
+        order_numbers=order_numbers or [],
     )
 
 
 def test_normalize_number():
     assert normalize_number("113-1234567-1234567") == "11312345671234567"
     assert normalize_number("1z 999 aa1") == "1Z999AA1"
+    # невидимый RTL-символ из буфера обмена (реальный случай с прода)
+    assert normalize_number("‫112-0271351-5232215") == "11202713515232215"
 
 
 def test_order_number_match_dominates():
     matcher = MatcherService()
-    target = row(make_order(id=1, store_order_number="113-1234567-1234567"))
+    target = row(make_order(id=1), order_numbers=["113-1234567-1234567"])
     other = row(make_order(id=2, store="Amazon"))
     scored = matcher.score_orders(
         [other, target],

@@ -20,17 +20,19 @@ class PgStatusHistoryRepository:
         source: str,
         email_log_id: int | None = None,
         comment: str | None = None,
+        suborder_id: int | None = None,
     ) -> StatusChange:
         row = await self._conn.fetchrow(
             "INSERT INTO order_status_history "
-            "(order_id, old_status, new_status, source, email_log_id, comment) "
-            "VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            "(order_id, old_status, new_status, source, email_log_id, comment, suborder_id) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
             order_id,
             old_status.value if old_status else None,
             new_status.value,
             str(source),
             email_log_id,
             comment,
+            suborder_id,
         )
         assert row is not None
         return record_to_status_change(row)

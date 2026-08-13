@@ -36,6 +36,16 @@ OVERDUE_STATUSES = {
 # Автоматика умеет двигать только сюда.
 AUTO_TARGETS = {OrderStatus.SHIPPED, OrderStatus.AT_WAREHOUSE}
 
+# Статусы подзаказа: физический путь посылки; closed/refunded — уровень заказа.
+SUBORDER_STATUSES = {
+    OrderStatus.PURCHASED,
+    OrderStatus.SHIPPED,
+    OrderStatus.AT_WAREHOUSE,
+    OrderStatus.IN_FLIGHT,
+    OrderStatus.DELIVERED,
+    OrderStatus.CANCELLED,
+}
+
 # Дефолт тарифа; рабочее значение живёт в настройках (commission.per_kg_usd).
 COMMISSION_PER_KG_USD = Decimal("50")
 _CENT = Decimal("0.01")
@@ -68,6 +78,20 @@ def suggest_commission(
     weight_kg: Decimal, per_kg_usd: Decimal = COMMISSION_PER_KG_USD
 ) -> Decimal:
     return (weight_kg * per_kg_usd).quantize(_CENT)
+
+
+def aggregate_order_status(
+    sub_statuses: list[OrderStatus], current: OrderStatus
+) -> OrderStatus:
+    """Агрегатный статус заказа-корзины: худший (самый ранний по линейке) из
+    активных подзаказов. closed/refunded — ручные терминальные статусы уровня
+    заказа, агрегат их не перебивает. Все подзаказы отменены — заказ отменён."""
+    if current in (OrderStatus.CLOSED, OrderStatus.REFUNDED):
+        return current
+    active = [s for s in sub_statuses if s != OrderStatus.CANCELLED]
+    if not active:
+        return OrderStatus.CANCELLED
+    return min(active, key=flow_index)
 
 
 def is_overdue(status: OrderStatus, promised_date: date | None, today: date) -> bool:

@@ -20,6 +20,7 @@ from crm.domain.models import (
     OrderListRow,
     Payment,
     StatusChange,
+    Suborder,
     Track,
 )
 from crm.presentation.schemas.clients import ClientDetailOut, ClientListItemOut, ClientOut
@@ -32,6 +33,7 @@ from crm.presentation.schemas.orders import (
     OrderItemOut,
     OrderListItemOut,
     StatusChangeOut,
+    SuborderOut,
 )
 from crm.presentation.schemas.payments import PaymentOut
 from crm.presentation.schemas.settings import GmailConnectionOut, SettingsOut
@@ -76,7 +78,8 @@ def order_row_to_out(row: OrderListRow, today: date) -> OrderListItemOut:
         client_id=o.client_id,
         client_name=row.client_name,
         store=o.store,
-        store_order_number=o.store_order_number,
+        store_order_number=row.order_numbers[0] if row.order_numbers else None,
+        suborders_count=row.suborders_count,
         items=o.items,
         status=o.status.value,
         purchase_price_usd=o.purchase_price_usd,
@@ -99,6 +102,17 @@ def status_change_to_out(s: StatusChange) -> StatusChangeOut:
         source=s.source.value,
         comment=s.comment,
         changed_at=s.changed_at,
+        suborder_id=s.suborder_id,
+    )
+
+
+def suborder_to_out(s: Suborder) -> SuborderOut:
+    return SuborderOut(
+        id=s.id,
+        order_id=s.order_id,
+        store_order_number=s.store_order_number,
+        amount_usd=s.amount_usd,
+        status=s.status.value,
     )
 
 
@@ -110,7 +124,10 @@ def order_detail_to_out(detail: OrderDetail, today: date) -> OrderDetailOut:
         client_id=o.client_id,
         client_name=detail.client_name,
         store=o.store,
-        store_order_number=o.store_order_number,
+        store_order_number=next(
+            (s.store_order_number for s in detail.suborders if s.store_order_number), None
+        ),
+        suborders_count=len(detail.suborders),
         items=o.items,
         status=o.status.value,
         purchase_price_usd=o.purchase_price_usd,
@@ -131,6 +148,7 @@ def order_detail_to_out(detail: OrderDetail, today: date) -> OrderDetailOut:
         closed_at=o.closed_at,
         created_at=o.created_at,
         updated_at=o.updated_at,
+        suborders=[suborder_to_out(s) for s in detail.suborders],
         tracks=[track_to_out(t) for t in detail.tracks],
         payments=[payment_to_out(p) for p in detail.payments],
         history=[status_change_to_out(s) for s in detail.history],
@@ -160,6 +178,7 @@ def track_to_out(t: Track) -> TrackOut:
         tracking_number=t.tracking_number,
         carrier=t.carrier,
         order_id=t.order_id,
+        suborder_id=t.suborder_id,
         source=t.source.value,
         match_status=t.match_status.value,
         candidates=(

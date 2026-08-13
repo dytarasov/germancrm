@@ -23,6 +23,7 @@ from tests.unit.fakes import (
     FakeGmailStateRepository,
     FakeOrderRepository,
     FakeSettingsRepository,
+    FakeSuborderRepository,
     FakeTrackRepository,
     FakeUnitOfWork,
 )
@@ -100,6 +101,7 @@ def build_service(gmail: FakeGmail, state: FakeGmailStateRepository, emails: Fak
         settings=FakeSettingsRepository({"mail.whitelist_domains": ["amazon.com"]}),
         orders=FakeOrderRepository(),
         tracks=FakeTrackRepository(),
+        suborders=FakeSuborderRepository(),
         order_service=None,
         matcher=MatcherService(),
         llm=None,

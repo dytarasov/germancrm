@@ -17,6 +17,7 @@ from crm.presentation.mappers.api_mappers import (
     order_row_to_out,
     payment_to_out,
     status_change_to_out,
+    suborder_to_out,
     track_to_out,
 )
 from crm.presentation.schemas.orders import (
@@ -30,6 +31,10 @@ from crm.presentation.schemas.orders import (
     RefundIn,
     StatusChangeIn,
     StatusChangeOut,
+    SuborderIn,
+    SuborderOut,
+    SuborderStatusIn,
+    SuborderUpdate,
 )
 from crm.presentation.schemas.payments import PaymentCreate, PaymentOut
 from crm.presentation.schemas.tracks import OrderTrackCreate, TrackOut
@@ -134,6 +139,45 @@ async def copy_order(order_id: int, svc: FromDishka[OrderService]) -> OrderDetai
 async def status_history(order_id: int, svc: FromDishka[OrderService]) -> list[StatusChangeOut]:
     detail = await svc.get_detail(order_id)
     return [status_change_to_out(s) for s in detail.history]
+
+
+@router.post("/{order_id}/suborders", response_model=SuborderOut, status_code=201)
+async def add_suborder(
+    order_id: int, payload: SuborderIn, svc: FromDishka[OrderService]
+) -> SuborderOut:
+    sub = await svc.add_suborder(
+        order_id,
+        store_order_number=payload.store_order_number,
+        amount_usd=payload.amount_usd,
+    )
+    return suborder_to_out(sub)
+
+
+@router.patch("/{order_id}/suborders/{suborder_id}", response_model=SuborderOut)
+async def update_suborder(
+    order_id: int, suborder_id: int, payload: SuborderUpdate, svc: FromDishka[OrderService]
+) -> SuborderOut:
+    sub = await svc.update_suborder(
+        order_id, suborder_id, payload.model_dump(exclude_unset=True)
+    )
+    return suborder_to_out(sub)
+
+
+@router.delete("/{order_id}/suborders/{suborder_id}", status_code=204)
+async def delete_suborder(
+    order_id: int, suborder_id: int, svc: FromDishka[OrderService]
+) -> None:
+    await svc.delete_suborder(order_id, suborder_id)
+
+
+@router.post("/{order_id}/suborders/{suborder_id}/status", response_model=OrderDetailOut)
+async def set_suborder_status(
+    order_id: int, suborder_id: int, payload: SuborderStatusIn, svc: FromDishka[OrderService]
+) -> OrderDetailOut:
+    detail = await svc.set_suborder_status(
+        order_id, suborder_id, payload.status, comment=payload.comment
+    )
+    return order_detail_to_out(detail, business_today())
 
 
 @router.post("/{order_id}/tracks", response_model=TrackOut, status_code=201)

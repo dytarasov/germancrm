@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from crm.application.interfaces.repositories import OrderFilters
+from crm.application.services.matching import normalize_number
 from crm.domain.enums import (
     EmailProcessingStatus,
     OrderStatus,
@@ -26,6 +27,7 @@ from crm.domain.models import (
     OrderListRow,
     Payment,
     StatusChange,
+    Suborder,
     Track,
     TrackCandidate,
 )
@@ -39,7 +41,6 @@ def make_order(**overrides: Any) -> Order:
         "id": 1,
         "client_id": 1,
         "store": "Amazon",
-        "store_order_number": None,
         "items": "iPhone 17 Pro",
         "purchase_price_usd": Decimal("1000.00"),
         "commission_usd": None,
@@ -74,14 +75,102 @@ class FakeUnitOfWork:
         self.exited += 1
 
 
-class FakeOrderRepository:
+class FakeSuborderRepository:
     def __init__(self) -> None:
-        self.storage: dict[int, Order] = {}
-        self.client_names: dict[int, str] = {1: "Иванов"}
+        self.storage: dict[int, Suborder] = {}
         self._ids = itertools.count(1)
 
-    def seed(self, order: Order) -> Order:
+    def seed(
+        self,
+        *,
+        order_id: int,
+        store_order_number: str | None = None,
+        amount_usd: Decimal | None = None,
+        status: OrderStatus = OrderStatus.PURCHASED,
+    ) -> Suborder:
+        sub = Suborder(
+            id=next(self._ids),
+            order_id=order_id,
+            store_order_number=store_order_number,
+            amount_usd=amount_usd,
+            status=status,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        self.storage[sub.id] = sub
+        return sub
+
+    async def add(
+        self,
+        *,
+        order_id: int,
+        store_order_number: str | None,
+        amount_usd: Decimal | None,
+        status: OrderStatus = OrderStatus.PURCHASED,
+    ) -> Suborder:
+        return self.seed(
+            order_id=order_id,
+            store_order_number=store_order_number,
+            amount_usd=amount_usd,
+            status=status,
+        )
+
+    async def get(self, suborder_id: int, *, for_update: bool = False) -> Suborder | None:
+        return self.storage.get(suborder_id)
+
+    async def list_for_order(self, order_id: int) -> list[Suborder]:
+        return sorted(
+            (s for s in self.storage.values() if s.order_id == order_id),
+            key=lambda s: s.id,
+        )
+
+    async def update(self, suborder_id: int, fields: dict[str, Any]) -> Suborder | None:
+        sub = self.storage.get(suborder_id)
+        if sub is None:
+            return None
+        fields = dict(fields)
+        if "status" in fields:
+            fields["status"] = OrderStatus(str(fields["status"]))
+        self.storage[suborder_id] = replace(sub, **fields)
+        return self.storage[suborder_id]
+
+    async def delete(self, suborder_id: int) -> None:
+        self.storage.pop(suborder_id, None)
+
+    async def find_by_number(self, normalized_number: str) -> list[Suborder]:
+        if not normalized_number:
+            return []
+        return sorted(
+            (
+                s
+                for s in self.storage.values()
+                if s.store_order_number
+                and normalize_number(s.store_order_number) == normalized_number
+            ),
+            key=lambda s: s.id,
+        )
+
+
+class FakeOrderRepository:
+    def __init__(self, suborders: FakeSuborderRepository | None = None) -> None:
+        self.storage: dict[int, Order] = {}
+        self.client_names: dict[int, str] = {1: "Иванов"}
+        self.suborders = suborders
+        self._ids = itertools.count(1)
+
+    def seed(self, order: Order, *, order_number: str | None = None) -> Order:
         self.storage[order.id] = order
+        # как миграция 0006: у каждого заказа есть хотя бы один подзаказ
+        if self.suborders is not None and not any(
+            s.order_id == order.id for s in self.suborders.storage.values()
+        ):
+            sub_status = {
+                OrderStatus.CLOSED: OrderStatus.DELIVERED,
+                OrderStatus.REFUNDED: OrderStatus.CANCELLED,
+            }.get(order.status, order.status)
+            self.suborders.seed(
+                order_id=order.id, store_order_number=order_number, status=sub_status
+            )
         return order
 
     async def add(self, fields: dict[str, Any]) -> Order:
@@ -120,11 +209,19 @@ class FakeOrderRepository:
         return [self._row(o) for o in self.storage.values() if o.status in statuses]
 
     def _row(self, order: Order) -> OrderListRow:
+        subs: list[Suborder] = []
+        if self.suborders is not None:
+            subs = sorted(
+                (s for s in self.suborders.storage.values() if s.order_id == order.id),
+                key=lambda s: s.id,
+            )
         return OrderListRow(
             order=order,
             client_name=self.client_names.get(order.client_id, "Клиент"),
             paid_usd=Decimal("0"),
             tracks_count=0,
+            suborders_count=len(subs) if subs else 1,
+            order_numbers=[s.store_order_number for s in subs if s.store_order_number],
         )
 
 
@@ -183,6 +280,7 @@ class FakeTrackRepository:
             tracking_number=kwargs["tracking_number"],
             carrier=kwargs.get("carrier"),
             order_id=kwargs.get("order_id"),
+            suborder_id=kwargs.get("suborder_id"),
             source=TrackSource(str(kwargs.get("source", "manual"))),
             email_log_id=kwargs.get("email_log_id"),
             match_status=TrackMatchStatus(str(kwargs.get("match_status", "linked"))),
@@ -291,6 +389,7 @@ class FakeStatusHistoryRepository:
         source,
         email_log_id=None,
         comment=None,
+        suborder_id=None,
     ) -> StatusChange:
         change = StatusChange(
             id=next(self._ids),
@@ -301,6 +400,7 @@ class FakeStatusHistoryRepository:
             email_log_id=email_log_id,
             comment=comment,
             changed_at=NOW,
+            suborder_id=suborder_id,
         )
         self.entries.append(change)
         return change

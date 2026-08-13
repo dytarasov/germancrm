@@ -15,6 +15,7 @@ from tests.unit.fakes import (
     FakePaymentRepository,
     FakeSettingsRepository,
     FakeStatusHistoryRepository,
+    FakeSuborderRepository,
     FakeTrackRepository,
     FakeUnitOfWork,
     make_order,
@@ -22,8 +23,13 @@ from tests.unit.fakes import (
 
 
 @pytest.fixture
-def orders() -> FakeOrderRepository:
-    return FakeOrderRepository()
+def suborders() -> FakeSuborderRepository:
+    return FakeSuborderRepository()
+
+
+@pytest.fixture
+def orders(suborders) -> FakeOrderRepository:
+    return FakeOrderRepository(suborders)
 
 
 @pytest.fixture
@@ -37,7 +43,7 @@ def items() -> FakeOrderItemRepository:
 
 
 @pytest.fixture
-def service(orders, history, items) -> OrderService:
+def service(orders, history, items, suborders) -> OrderService:
     return OrderService(
         orders,
         items,
@@ -45,6 +51,7 @@ def service(orders, history, items) -> OrderService:
         FakePaymentRepository(),
         history,
         FakeSettingsRepository(),
+        suborders,
         FakeUnitOfWork(),
     )
 
@@ -100,7 +107,9 @@ class TestManualStatus:
 class TestAutoCommission:
     """Фактический вес заполняет комиссию по тарифу — но никогда не перетирает ручную."""
 
-    async def test_weight_fills_empty_commission_by_tariff(self, orders, history, items):
+    async def test_weight_fills_empty_commission_by_tariff(
+        self, orders, history, items, suborders
+    ):
         settings = FakeSettingsRepository({"commission.per_kg_usd": 60})
         service = OrderService(
             orders,
@@ -109,6 +118,7 @@ class TestAutoCommission:
             FakePaymentRepository(),
             history,
             settings,
+            suborders,
             FakeUnitOfWork(),
         )
         orders.seed(make_order(id=1, commission_usd=None))
@@ -206,18 +216,19 @@ class TestCopy:
             make_order(
                 id=1,
                 status=OrderStatus.CANCELLED,
-                store_order_number="113-111",
                 commission_usd=Decimal("55"),
                 weight_kg=Decimal("2.4"),
                 est_weight_kg=Decimal("2.0"),
-            )
+            ),
+            order_number="113-111",
         )
         detail = await service.copy(1)
         copy = detail.order
         assert copy.id != 1
         assert copy.copied_from == 1
         assert copy.status == OrderStatus.PURCHASED
-        assert copy.store_order_number is None
+        # перезаказ получает один пустой подзаказ — номера магазина будут новые
+        assert [s.store_order_number for s in detail.suborders] == [None]
         assert copy.commission_usd == Decimal("55")
         assert copy.weight_kg is None  # факт принадлежит старой посылке
         assert copy.est_weight_kg == Decimal("2.0")
@@ -226,7 +237,9 @@ class TestCopy:
 
 
 class TestDelete:
-    async def test_delete_releases_tracks_to_open_queue(self, orders, history, items):
+    async def test_delete_releases_tracks_to_open_queue(
+        self, orders, history, items, suborders
+    ):
         tracks = FakeTrackRepository()
         service = OrderService(
             orders,
@@ -235,6 +248,7 @@ class TestDelete:
             FakePaymentRepository(),
             history,
             FakeSettingsRepository(),
+            suborders,
             FakeUnitOfWork(),
         )
         orders.seed(make_order(id=1))
@@ -253,7 +267,9 @@ class TestDelete:
         assert track.order_id is None
         assert str(track.match_status) == "open"  # вернулся в очередь, не «осиротел»
 
-    async def test_delete_keeps_dismissed_tracks_dismissed(self, orders, history, items):
+    async def test_delete_keeps_dismissed_tracks_dismissed(
+        self, orders, history, items, suborders
+    ):
         tracks = FakeTrackRepository()
         service = OrderService(
             orders,
@@ -262,6 +278,7 @@ class TestDelete:
             FakePaymentRepository(),
             history,
             FakeSettingsRepository(),
+            suborders,
             FakeUnitOfWork(),
         )
         orders.seed(make_order(id=1))

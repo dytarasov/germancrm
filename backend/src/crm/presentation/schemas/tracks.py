@@ -40,6 +40,7 @@ class TrackOut(BaseModel):
     tracking_number: str
     carrier: str | None
     order_id: int | None
+    suborder_id: int | None
     source: str
     match_status: str
     candidates: list[TrackCandidateOut] | None

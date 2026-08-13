@@ -17,7 +17,8 @@ export interface OrderListItem {
   client_id: number;
   client_name: string;
   store: string;
-  store_order_number: string | null;
+  store_order_number: string | null; // первый номер подзаказа
+  suborders_count: number;
   items: string;
   status: OrderStatus;
   purchase_price_usd: string;
@@ -38,6 +39,16 @@ export interface StatusChange {
   source: StatusSource;
   comment: string | null;
   changed_at: string;
+  suborder_id: number | null;
+}
+
+/** Подзаказ: заказ магазина внутри корзины — номер, справочная сумма, свой статус. */
+export interface Suborder {
+  id: number;
+  order_id: number;
+  store_order_number: string | null;
+  amount_usd: string | null;
+  status: OrderStatus;
 }
 
 export interface TrackCandidate {
@@ -52,6 +63,7 @@ export interface Track {
   tracking_number: string;
   carrier: string | null;
   order_id: number | null;
+  suborder_id: number | null;
   source: "manual" | "email";
   match_status: "linked" | "open" | "dismissed";
   candidates: TrackCandidate[] | null;
@@ -93,6 +105,7 @@ export interface OrderDetail extends OrderListItem {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  suborders: Suborder[];
   tracks: Track[];
   payments: Payment[];
   history: StatusChange[];

@@ -13,6 +13,7 @@ _UPDATABLE = {
     "tracking_number",
     "carrier",
     "order_id",
+    "suborder_id",
     "match_status",
     "candidates",
     "note",
@@ -35,15 +36,17 @@ class PgTrackRepository:
         match_status: str,
         candidates: list[dict[str, Any]] | None,
         note: str | None,
+        suborder_id: int | None = None,
     ) -> Track:
         try:
             row = await self._conn.fetchrow(
-                "INSERT INTO tracks (tracking_number, carrier, order_id, source, "
+                "INSERT INTO tracks (tracking_number, carrier, order_id, suborder_id, source, "
                 "email_log_id, match_status, candidates, note) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
                 tracking_number,
                 carrier,
                 order_id,
+                suborder_id,
                 str(source),
                 email_log_id,
                 str(match_status),

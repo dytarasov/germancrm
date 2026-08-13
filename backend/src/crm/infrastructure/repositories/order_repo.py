@@ -19,7 +19,6 @@ _OVERDUE = [s.value for s in rules.OVERDUE_STATUSES]
 _INSERTABLE = {
     "client_id",
     "store",
-    "store_order_number",
     "items",
     "purchase_price_usd",
     "commission_usd",
@@ -40,11 +39,18 @@ _UPDATABLE = _INSERTABLE
 _ROW_SQL = """
 SELECT o.*, c.name AS client_name,
        COALESCE(p.paid, 0) AS paid_usd,
-       COALESCE(t.cnt, 0) AS tracks_count
+       COALESCE(t.cnt, 0) AS tracks_count,
+       COALESCE(s.cnt, 0) AS suborders_count,
+       s.numbers AS order_numbers
 FROM orders o
 JOIN clients c ON c.id = o.client_id
 LEFT JOIN LATERAL (SELECT SUM(amount_usd) AS paid FROM payments WHERE order_id = o.id) p ON TRUE
 LEFT JOIN LATERAL (SELECT COUNT(*) AS cnt FROM tracks WHERE order_id = o.id) t ON TRUE
+LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS cnt,
+           ARRAY_REMOVE(ARRAY_AGG(store_order_number ORDER BY id), NULL) AS numbers
+    FROM suborders WHERE order_id = o.id
+) s ON TRUE
 """
 
 
@@ -108,7 +114,8 @@ class PgOrderRepository:
             pattern = arg(like_pattern(filters.search))
             conds.append(
                 f"(lower(o.items) LIKE {pattern} OR lower(o.store) LIKE {pattern} "
-                f"OR lower(coalesce(o.store_order_number, '')) LIKE {pattern} "
+                f"OR EXISTS (SELECT 1 FROM suborders sub WHERE sub.order_id = o.id "
+                f"AND lower(coalesce(sub.store_order_number, '')) LIKE {pattern}) "
                 f"OR lower(c.name) LIKE {pattern} "
                 f"OR EXISTS (SELECT 1 FROM tracks tr WHERE tr.order_id = o.id "
                 f"AND lower(tr.tracking_number) LIKE {pattern}) "

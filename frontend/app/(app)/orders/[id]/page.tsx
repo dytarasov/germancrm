@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
-import type { Flight, OrderDetail, OrderItem, OrderStatus, Payment, Settings, Track } from "@/lib/api-types";
+import type { Flight, OrderDetail, OrderItem, OrderStatus, Payment, Settings, Suborder, Track } from "@/lib/api-types";
 import { STATUS_LABEL, isTerminal } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, isoToday, safeHref } from "@/lib/format";
 import { Badge, Button, Card, Field, Input, Section, Spinner, cx } from "@/components/ui";
+import { SelectBox } from "@/components/select-box";
 import { Combobox } from "@/components/combobox";
 import { DatePicker, formatDateRu } from "@/components/date-picker";
 import { RouteStepper } from "@/components/route-stepper";
@@ -313,13 +314,6 @@ export default function OrderPage() {
             onSave={(v) => v && saveField("store", v, order.store)}
           />
           <InlineField
-            label="Номер заказа в магазине"
-            value={order.store_order_number}
-            mono
-            placeholder="необязательно"
-            onSave={(v) => saveField("store_order_number", v, order.store_order_number)}
-          />
-          <InlineField
             label="Цена закупки, $"
             value={order.purchase_price_usd}
             type="money"
@@ -486,6 +480,7 @@ export default function OrderPage() {
         </div>
       </div>
 
+      <SubordersSection order={order} onApply={apply} />
       <ItemsSection order={order} />
       <TracksSection order={order} />
       <PaymentsSection order={order} />
@@ -495,25 +490,34 @@ export default function OrderPage() {
           <p className="text-[12.5px] text-muted">Пока пусто</p>
         ) : (
           <ul className="space-y-1.5">
-            {order.history.map((h) => (
-              <li key={h.id} className="flex items-baseline gap-2.5 text-[12.5px]">
-                <span className="w-32 shrink-0 text-muted">{fmtDateTime(h.changed_at)}</span>
-                <Badge
-                  className={
-                    h.source === "auto"
-                      ? "bg-accent-soft text-accent"
-                      : "bg-zinc-500/10 text-muted"
-                  }
-                >
-                  {h.source === "auto" ? "авто" : "вручную"}
-                </Badge>
-                <span>
-                  {h.old_status ? `${STATUS_LABEL[h.old_status]} → ` : ""}
-                  <span className="font-medium">{STATUS_LABEL[h.new_status]}</span>
-                </span>
-                {h.comment && <span className="text-muted">— {h.comment}</span>}
-              </li>
-            ))}
+            {order.history.map((h) => {
+              const subIdx = order.suborders.findIndex((s) => s.id === h.suborder_id);
+              const sub = subIdx >= 0 ? order.suborders[subIdx] : null;
+              return (
+                <li key={h.id} className="flex items-baseline gap-2.5 text-[12.5px]">
+                  <span className="w-32 shrink-0 text-muted">{fmtDateTime(h.changed_at)}</span>
+                  <Badge
+                    className={
+                      h.source === "auto"
+                        ? "bg-accent-soft text-accent"
+                        : "bg-zinc-500/10 text-muted"
+                    }
+                  >
+                    {h.source === "auto" ? "авто" : "вручную"}
+                  </Badge>
+                  {h.suborder_id !== null && order.suborders.length > 1 && (
+                    <Badge className="bg-zinc-500/10 font-mono text-muted">
+                      {sub?.store_order_number ?? `подзаказ №${subIdx >= 0 ? subIdx + 1 : "?"}`}
+                    </Badge>
+                  )}
+                  <span>
+                    {h.old_status ? `${STATUS_LABEL[h.old_status]} → ` : ""}
+                    <span className="font-medium">{STATUS_LABEL[h.new_status]}</span>
+                  </span>
+                  {h.comment && <span className="text-muted">— {h.comment}</span>}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Section>
@@ -752,6 +756,220 @@ function ItemsSection({ order }: { order: OrderDetail }) {
   );
 }
 
+// Статусы подзаказа: физический путь посылки; closed/refunded — уровень заказа.
+const SUB_STATUSES: OrderStatus[] = [
+  "purchased",
+  "shipped",
+  "at_warehouse",
+  "in_flight",
+  "delivered",
+  "cancelled",
+];
+
+function SubordersSection({
+  order,
+  onApply,
+}: {
+  order: OrderDetail;
+  onApply: (d: OrderDetail) => void;
+}) {
+  const qc = useQueryClient();
+  const [num, setNum] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const reload = () => {
+    qc.invalidateQueries({ queryKey: ["order", order.id] });
+    qc.invalidateQueries({ queryKey: ["orders"] });
+    // номер подзаказа и статус видны и в этих списках
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+    qc.invalidateQueries({ queryKey: ["client"] });
+  };
+  const multi = order.suborders.length > 1;
+  // Состав подзаказов правится только у живого заказа — то же правило на бэке
+  // (у отменённого добавление подзаказа иначе молча воскрешало бы заказ).
+  const orderTerminal = isTerminal(order.status);
+
+  const patchSub = (s: Suborder, fields: Record<string, unknown>, undo: Record<string, unknown>) => {
+    api
+      .patch<Suborder>(`/api/orders/${order.id}/suborders/${s.id}`, fields)
+      .then(() => {
+        toastSaved(() =>
+          api.patch(`/api/orders/${order.id}/suborders/${s.id}`, undo).then(reload),
+        );
+        reload();
+      })
+      .catch((err) => toastError(err.message));
+  };
+
+  const setSubStatus = (s: Suborder, status: OrderStatus) => {
+    if (status === s.status) return;
+    api
+      .post<OrderDetail>(`/api/orders/${order.id}/suborders/${s.id}/status`, { status })
+      .then((d) => {
+        onApply(d);
+        // добираем списки и гасим возможный «хвост» параллельного GET деталей
+        reload();
+        toastSaved(undefined, `Подзаказ: ${STATUS_LABEL[status]}`);
+      })
+      .catch((err) => toastError(err.message));
+  };
+
+  const add = (e: FormEvent) => {
+    e.preventDefault();
+    api
+      .post<Suborder>(`/api/orders/${order.id}/suborders`, {
+        store_order_number: num.trim() || null,
+        amount_usd: amount.trim() ? amount.trim().replace(",", ".") : null,
+      })
+      .then(() => {
+        setNum("");
+        setAmount("");
+        toastSaved(undefined, "Подзаказ добавлен");
+        reload();
+      })
+      .catch((err) => toastError(err.message));
+  };
+
+  const remove = (s: Suborder) => {
+    api
+      .del(`/api/orders/${order.id}/suborders/${s.id}`)
+      .then(() => {
+        toastSaved(undefined, "Подзаказ удалён");
+        reload();
+      })
+      .catch((err) => toastError(err.message));
+  };
+
+  return (
+    <Section
+      title={
+        multi
+          ? `Подзаказы (${order.suborders.length}) — общий статус по отстающему`
+          : "Подзаказ (номер заказа магазина)"
+      }
+    >
+      <div className="space-y-2">
+        {order.suborders.map((s, i) => {
+          const subTracks = order.tracks.filter((t) => t.suborder_id === s.id);
+          return (
+            <div
+              key={s.id}
+              className={cx(
+                "flex flex-wrap items-center gap-2 rounded-md border border-line p-2",
+                s.status === "cancelled" && "opacity-60",
+              )}
+            >
+              <span className="w-6 shrink-0 text-center text-[12px] text-muted">{i + 1}.</span>
+              {orderTerminal ? (
+                <>
+                  <span className="font-mono text-[13px]">
+                    {s.store_order_number ?? "нет номера"}
+                  </span>
+                  {s.amount_usd && (
+                    <span className="font-mono text-[12.5px] text-muted tnum">
+                      {fmtMoney(s.amount_usd)}
+                    </span>
+                  )}
+                  <StatusBadge status={s.status} />
+                </>
+              ) : (
+                <>
+                  <InlineField
+                    label="Номер заказа"
+                    value={s.store_order_number}
+                    mono
+                    placeholder="нет номера"
+                    onSave={(v) =>
+                      patchSub(
+                        s,
+                        { store_order_number: v },
+                        { store_order_number: s.store_order_number },
+                      )
+                    }
+                  />
+                  <InlineField
+                    label="Сумма, $ (справочно)"
+                    value={s.amount_usd}
+                    type="money"
+                    placeholder="—"
+                    onSave={(v) =>
+                      patchSub(
+                        s,
+                        { amount_usd: v === null ? null : v.replace(",", ".") },
+                        { amount_usd: s.amount_usd },
+                      )
+                    }
+                  />
+                </>
+              )}
+              {multi && !orderTerminal && (
+                <div>
+                  <div className="mb-0.5 px-2 text-[11.5px] font-medium text-muted">Статус</div>
+                  <div className="flex items-center gap-2">
+                    <SelectBox
+                      value={s.status}
+                      onChange={(v) => setSubStatus(s, v as OrderStatus)}
+                      options={SUB_STATUSES.map((st) => ({
+                        value: st,
+                        label: STATUS_LABEL[st],
+                      }))}
+                    />
+                    <StatusBadge status={s.status} />
+                  </div>
+                </div>
+              )}
+              {subTracks.length > 0 && (
+                <span className="text-[12px] text-muted">
+                  {subTracks.map((t) => (
+                    <span key={t.id} className="mr-1.5 font-mono text-[11.5px]">
+                      {t.tracking_number}
+                    </span>
+                  ))}
+                </span>
+              )}
+              {multi && !orderTerminal && (
+                <Button
+                  variant="ghost"
+                  className="ml-auto h-7"
+                  onClick={() => remove(s)}
+                >
+                  Удалить
+                </Button>
+              )}
+            </div>
+          );
+        })}
+        {!orderTerminal && (
+          <form onSubmit={add} className="flex flex-wrap gap-2 pt-1">
+            <Input
+              className="font-mono sm:max-w-64"
+              placeholder="ещё номер заказа магазина"
+              value={num}
+              onChange={(e) => setNum(e.target.value)}
+            />
+            <Input
+              className="w-28 font-mono"
+              placeholder="сумма $"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <Button type="submit" disabled={!num.trim() && !amount.trim()}>
+              Добавить подзаказ
+            </Button>
+          </form>
+        )}
+        {multi && (
+          <p className="text-[12px] text-muted">
+            Статусы подзаказов ведёт почта (по номерам заказов); общий статус заказа — по самому
+            отстающему активному подзаказу. Смена статуса в шапке применяется ко всем сразу.
+          </p>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function TracksSection({ order }: { order: OrderDetail }) {
   const qc = useQueryClient();
   const [num, setNum] = useState("");
@@ -792,18 +1010,29 @@ function TracksSection({ order }: { order: OrderDetail }) {
   return (
     <Section title={`Треки (${order.tracks.length})`}>
       <div className="space-y-2">
-        {order.tracks.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 text-[13px]">
-            <span className="font-mono">{t.tracking_number}</span>
-            {t.carrier && <Badge className="bg-zinc-500/10 text-muted uppercase">{t.carrier}</Badge>}
-            <Badge className="bg-zinc-500/10 text-muted">
-              {t.source === "email" ? "из письма" : "вручную"}
-            </Badge>
-            <Button variant="ghost" className="ml-auto h-7" onClick={() => unlink(t)}>
-              Отвязать
-            </Button>
-          </div>
-        ))}
+        {order.tracks.map((t) => {
+          const subIdx = order.suborders.findIndex((s) => s.id === t.suborder_id);
+          const sub = subIdx >= 0 ? order.suborders[subIdx] : null;
+          return (
+            <div key={t.id} className="flex items-center gap-3 text-[13px]">
+              <span className="font-mono">{t.tracking_number}</span>
+              {t.carrier && (
+                <Badge className="bg-zinc-500/10 text-muted uppercase">{t.carrier}</Badge>
+              )}
+              <Badge className="bg-zinc-500/10 text-muted">
+                {t.source === "email" ? "из письма" : "вручную"}
+              </Badge>
+              {order.suborders.length > 1 && sub && (
+                <Badge className="bg-accent-soft font-mono text-accent">
+                  подзаказ {sub.store_order_number ?? `№${subIdx + 1}`}
+                </Badge>
+              )}
+              <Button variant="ghost" className="ml-auto h-7" onClick={() => unlink(t)}>
+                Отвязать
+              </Button>
+            </div>
+          );
+        })}
         <form onSubmit={add} className="flex flex-wrap gap-2 pt-1">
           <Input
             className="font-mono sm:max-w-72"

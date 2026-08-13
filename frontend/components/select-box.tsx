@@ -31,17 +31,20 @@ export function SelectBox({
   options,
   placeholder,
   className,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: ReactNode }[];
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <RSelect.Root
       value={value === "" ? EMPTY : value}
       onValueChange={(v) => onChange(v === EMPTY ? "" : v)}
+      disabled={disabled}
     >
       <RSelect.Trigger
         aria-label={placeholder}

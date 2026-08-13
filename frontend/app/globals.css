@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Тема управляется атрибутом data-theme на <html> (ставит инлайн-скрипт в layout
+   до первой отрисовки; «системная» резолвится в light/dark там же). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --bg: #fafafa;
   --surface: #ffffff;
@@ -9,19 +13,19 @@
   --muted: #71717a;
   --accent: #4f46e5;
   --accent-soft: rgba(79, 70, 229, 0.08);
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #09090b;
-    --surface: #131316;
-    --surface2: #1c1c21;
-    --line: #26262b;
-    --ink: #fafafa;
-    --muted: #a1a1aa;
-    --accent: #818cf8;
-    --accent-soft: rgba(129, 140, 248, 0.12);
-  }
+:root[data-theme="dark"] {
+  --bg: #09090b;
+  --surface: #131316;
+  --surface2: #1c1c21;
+  --line: #26262b;
+  --ink: #fafafa;
+  --muted: #a1a1aa;
+  --accent: #818cf8;
+  --accent-soft: rgba(129, 140, 248, 0.12);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -35,10 +39,6 @@
   --color-accent-soft: var(--accent-soft);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
-}
-
-html {
-  color-scheme: light dark;
 }
 
 body {

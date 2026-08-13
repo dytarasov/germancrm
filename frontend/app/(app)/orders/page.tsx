@@ -18,6 +18,9 @@ import { toastError } from "@/components/toasts";
 
 type SegVal = "active" | "closed" | "all";
 
+// столько же, сколько MAX_SUBORDERS на бэке (OrderCreate.suborders max_length)
+const MAX_SUBORDERS = 20;
+
 const ALL_STATUSES: OrderStatus[] = [
   "purchased",
   "shipped",
@@ -49,6 +52,8 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
   // Защита от дублей: при ретрае после ошибки не создаём клиента второй раз.
   const [createdClientId, setCreatedClientId] = useState<number | null>(null);
   const [store, setStore] = useState("");
+  // подзаказы: номера заказов магазина + справочные суммы (корзина может разбиться)
+  const [subs, setSubs] = useState([{ number: "", amount: "" }]);
   const [items, setItems] = useState("");
   const [links, setLinks] = useState("");
   const [price, setPrice] = useState("");
@@ -74,9 +79,19 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         }
       }
       const linkList = links.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+      const subList = subs
+        .map((s) => ({ number: s.number.trim(), amount: s.amount.trim() }))
+        .filter((s) => s.number || s.amount);
       const order = await api.post<OrderDetail>("/api/orders", {
         client_id: cid,
         store: store.trim(),
+        suborders:
+          subList.length > 0
+            ? subList.map((s) => ({
+                store_order_number: s.number || null,
+                amount_usd: s.amount ? s.amount.replace(",", ".") : null,
+              }))
+            : undefined,
         items: items.trim(),
         purchase_price_usd: price.trim(),
         commission_usd: commission.trim() || undefined,
@@ -153,6 +168,54 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             />
           </Field>
         </div>
+        <Field label="Номера заказов магазина (можно позже; несколько, если корзина разбилась)">
+          <div className="space-y-2">
+            {subs.map((s, i) => (
+              <div key={i} className="flex gap-2">
+                <Input
+                  placeholder="111-2345678-1234567"
+                  className="min-w-0 flex-1 font-mono"
+                  value={s.number}
+                  onChange={(e) =>
+                    setSubs(subs.map((x, j) => (j === i ? { ...x, number: e.target.value } : x)))
+                  }
+                />
+                <Input
+                  placeholder="сумма $"
+                  inputMode="decimal"
+                  className="w-24 font-mono"
+                  value={s.amount}
+                  onChange={(e) =>
+                    setSubs(subs.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
+                  }
+                />
+                {subs.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label="Убрать подзаказ"
+                    onClick={() => setSubs(subs.filter((_, j) => j !== i))}
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={subs.length >= MAX_SUBORDERS}
+              onClick={() => setSubs([...subs, { number: "", amount: "" }])}
+            >
+              + ещё номер (подзаказ)
+            </Button>
+            {subs.length >= MAX_SUBORDERS && (
+              <p className="text-[12px] text-muted">
+                Максимум {MAX_SUBORDERS} подзаказов в одном заказе.
+              </p>
+            )}
+          </div>
+        </Field>
         <Field label="Товар">
           <Input
             placeholder="iPhone 17 Pro 256GB"
@@ -309,8 +372,8 @@ export default function OrdersPage() {
           <>
             {/* Таблица (sm+), при нехватке ширины скроллится внутри карточки */}
             <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[640px]">
-                <OrdersTableHead />
+              <table className="w-full min-w-[720px]">
+                <OrdersTableHead showClient />
                 <tbody>
                   {groups.map(([cid, g]) => {
                     const debt = g.orders.reduce(
@@ -319,11 +382,11 @@ export default function OrdersPage() {
                     );
                     const noCom = g.orders.filter((o) => o.commission_usd === null).length;
                     return [
-                      <tr key={`g${cid}`} className="border-b border-line bg-surface2/50">
-                        <td colSpan={5} className="px-3 py-1.5">
+                      <tr key={`g${cid}`} className="border-b border-line bg-surface2/70">
+                        <td colSpan={6} className="border-l-2 border-l-accent px-3 py-1.5">
                           <Link
                             href={`/clients/${cid}`}
-                            className="text-[12.5px] font-semibold hover:text-accent hover:underline"
+                            className="text-[12.5px] font-semibold text-accent hover:underline"
                           >
                             {g.name}
                           </Link>
@@ -337,7 +400,7 @@ export default function OrdersPage() {
                           )}
                         </td>
                       </tr>,
-                      ...g.orders.map((o) => <OrderRow key={o.id} order={o} />),
+                      ...g.orders.map((o) => <OrderRow key={o.id} order={o} showClient />),
                     ];
                   })}
                 </tbody>
@@ -353,10 +416,10 @@ export default function OrdersPage() {
                 const noCom = g.orders.filter((o) => o.commission_usd === null).length;
                 return (
                   <div key={cid}>
-                    <div className="border-y border-line bg-surface2/50 px-3 py-1.5 first:border-t-0">
+                    <div className="border-y border-line border-l-2 border-l-accent bg-surface2/70 px-3 py-1.5 first:border-t-0">
                       <Link
                         href={`/clients/${cid}`}
-                        className="text-[12.5px] font-semibold hover:text-accent"
+                        className="text-[12.5px] font-semibold text-accent hover:underline"
                       >
                         {g.name}
                       </Link>

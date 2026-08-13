@@ -27,6 +27,7 @@ from crm.domain.models import (
     OrderListRow,
     Payment,
     StatusChange,
+    Suborder,
     Track,
 )
 
@@ -76,6 +77,30 @@ class OrderRepository(Protocol):
     ) -> list[OrderListRow]: ...
 
 
+class SuborderRepository(Protocol):
+    async def add(
+        self,
+        *,
+        order_id: int,
+        store_order_number: str | None,
+        amount_usd: Decimal | None,
+        status: OrderStatus = OrderStatus.PURCHASED,
+    ) -> Suborder: ...
+
+    async def get(self, suborder_id: int, *, for_update: bool = False) -> Suborder | None: ...
+
+    async def list_for_order(self, order_id: int) -> list[Suborder]: ...
+
+    async def update(self, suborder_id: int, fields: dict[str, Any]) -> Suborder | None: ...
+
+    async def delete(self, suborder_id: int) -> None: ...
+
+    async def find_by_number(self, normalized_number: str) -> list[Suborder]:
+        """Точный поиск по номеру заказа магазина в канонической форме
+        (normalize_number): без ограничений по возрасту и статусу."""
+        ...
+
+
 class OrderItemRepository(Protocol):
     async def add(
         self,
@@ -108,6 +133,7 @@ class TrackRepository(Protocol):
         match_status: str,
         candidates: list[dict[str, Any]] | None,
         note: str | None,
+        suborder_id: int | None = None,
     ) -> Track: ...
 
     async def get(self, track_id: int) -> Track | None: ...
@@ -177,6 +203,7 @@ class StatusHistoryRepository(Protocol):
         source: str,
         email_log_id: int | None = None,
         comment: str | None = None,
+        suborder_id: int | None = None,
     ) -> StatusChange: ...
 
     async def list_for_order(self, order_id: int) -> list[StatusChange]: ...

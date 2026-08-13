@@ -25,6 +25,7 @@ from crm.domain.models import (
     OrderListRow,
     Payment,
     StatusChange,
+    Suborder,
     Track,
     TrackCandidate,
 )
@@ -47,7 +48,6 @@ def record_to_order(r: asyncpg.Record) -> Order:
         id=r["id"],
         client_id=r["client_id"],
         store=r["store"],
-        store_order_number=r["store_order_number"],
         items=r["items"],
         purchase_price_usd=r["purchase_price_usd"],
         commission_usd=r["commission_usd"],
@@ -73,6 +73,20 @@ def record_to_order_row(r: asyncpg.Record) -> OrderListRow:
         client_name=r["client_name"],
         paid_usd=r["paid_usd"] or Decimal("0"),
         tracks_count=r["tracks_count"] or 0,
+        suborders_count=r["suborders_count"] or 0,
+        order_numbers=list(r["order_numbers"] or []),
+    )
+
+
+def record_to_suborder(r: asyncpg.Record) -> Suborder:
+    return Suborder(
+        id=r["id"],
+        order_id=r["order_id"],
+        store_order_number=r["store_order_number"],
+        amount_usd=r["amount_usd"],
+        status=OrderStatus(r["status"]),
+        created_at=r["created_at"],
+        updated_at=r["updated_at"],
     )
 
 
@@ -96,6 +110,7 @@ def record_to_track(r: asyncpg.Record) -> Track:
         tracking_number=r["tracking_number"],
         carrier=r["carrier"],
         order_id=r["order_id"],
+        suborder_id=r["suborder_id"],
         source=TrackSource(r["source"]),
         email_log_id=r["email_log_id"],
         match_status=TrackMatchStatus(r["match_status"]),
@@ -140,6 +155,7 @@ def record_to_status_change(r: asyncpg.Record) -> StatusChange:
         email_log_id=r["email_log_id"],
         comment=r["comment"],
         changed_at=r["changed_at"],
+        suborder_id=r["suborder_id"],
     )
 
 

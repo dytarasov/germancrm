@@ -22,6 +22,7 @@ from crm.application.interfaces.repositories import (
     ReportRepository,
     SettingsRepository,
     StatusHistoryRepository,
+    SuborderRepository,
     TrackRepository,
 )
 from crm.application.interfaces.uow import UnitOfWork
@@ -55,6 +56,7 @@ from crm.infrastructure.repositories.payment_repo import PgPaymentRepository
 from crm.infrastructure.repositories.report_repo import PgReportRepository
 from crm.infrastructure.repositories.settings_repo import PgSettingsRepository
 from crm.infrastructure.repositories.status_history_repo import PgStatusHistoryRepository
+from crm.infrastructure.repositories.suborder_repo import PgSuborderRepository
 from crm.infrastructure.repositories.track_repo import PgTrackRepository
 
 
@@ -119,6 +121,7 @@ class RequestProvider(Provider):
     clients = provide(PgClientRepository, provides=ClientRepository)
     orders = provide(PgOrderRepository, provides=OrderRepository)
     order_items = provide(PgOrderItemRepository, provides=OrderItemRepository)
+    suborders = provide(PgSuborderRepository, provides=SuborderRepository)
     tracks = provide(PgTrackRepository, provides=TrackRepository)
     payments = provide(PgPaymentRepository, provides=PaymentRepository)
     flights = provide(PgFlightRepository, provides=FlightRepository)
@@ -165,6 +168,7 @@ class RequestProvider(Provider):
         settings_repo: SettingsRepository,
         orders: OrderRepository,
         tracks: TrackRepository,
+        suborders: SuborderRepository,
         order_service: OrderService,
         matcher: MatcherService,
         llm: LLMExtractor,
@@ -179,6 +183,7 @@ class RequestProvider(Provider):
             settings_repo,
             orders,
             tracks,
+            suborders,
             order_service,
             matcher,
             llm,

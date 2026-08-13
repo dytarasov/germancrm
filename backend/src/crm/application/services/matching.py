@@ -11,7 +11,10 @@ from crm.domain.clock import business_today
 from crm.domain.enums import OrderStatus
 from crm.domain.models import OrderListRow
 
-_NORM_RE = re.compile(r"[\s\-]+")
+# Только буквы и цифры: реальные номера приезжают с пробелами, дефисами и даже
+# невидимыми символами (U+202B из буфера обмена) — всё это не должно ломать
+# точное совпадение. SQL-эквивалент — в suborder_repo и индексе 0006.
+_NORM_RE = re.compile(r"[^0-9A-Za-z]+")
 
 
 def normalize_number(value: str) -> str:
@@ -56,10 +59,8 @@ class MatcherService:
             score = 0
             reasons: list[str] = []
 
-            if (
-                norm_number
-                and order.store_order_number
-                and normalize_number(order.store_order_number) == norm_number
+            if norm_number and any(
+                normalize_number(n) == norm_number for n in row.order_numbers
             ):
                 score += 100
                 reasons.append("совпал номер заказа магазина")
@@ -88,7 +89,11 @@ class MatcherService:
                 reasons.append("у заказа ещё нет треков")
 
             age_days = (today - order.purchased_on).days
-            if age_days <= 14:
+            if age_days < 0:
+                # заказ создан ПОЗЖЕ письма — письмо не может быть о нём
+                score -= 30
+                reasons.append("заказ создан позже письма")
+            elif age_days <= 14:
                 score += 10
                 reasons.append("куплен недавно")
             elif age_days <= 45:

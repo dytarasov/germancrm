@@ -24,6 +24,7 @@ from tests.unit.fakes import (
     FakePaymentRepository,
     FakeSettingsRepository,
     FakeStatusHistoryRepository,
+    FakeSuborderRepository,
     FakeTrackRepository,
     FakeUnitOfWork,
     make_order,
@@ -67,7 +68,8 @@ def shipped_extraction(track="1Z999AA10123456784", confidence=0.95) -> EmailExtr
 
 def make_env():
     class Env:
-        orders = FakeOrderRepository()
+        suborders = FakeSuborderRepository()
+        orders = FakeOrderRepository(suborders)
         tracks = FakeTrackRepository()
         emails = FakeEmailRepository()
         gmail_state = FakeGmailStateRepository()
@@ -84,6 +86,7 @@ def make_env():
                 FakePaymentRepository(),
                 self.history,
                 self.settings,
+                self.suborders,
                 FakeUnitOfWork(),
             )
             return MailService(
@@ -93,6 +96,7 @@ def make_env():
                 settings=self.settings,
                 orders=self.orders,
                 tracks=self.tracks,
+                suborders=self.suborders,
                 order_service=order_service,
                 matcher=MatcherService(),
                 llm=llm,
@@ -242,7 +246,7 @@ async def test_processing_error_backoff_then_poison(env):
 
 async def test_order_number_only_in_subject_survives_guard(env):
     """Номер заказа часто лежит только в теме письма — guard обязан искать и там."""
-    env.orders.seed(make_order(id=1, store="Amazon", store_order_number=None))
+    env.orders.seed(make_order(id=1, store="Amazon"))
     env.emails.seed_entry(
         id=10,
         subject="Your order 113-1234567-1234567 has been confirmed",
@@ -261,7 +265,8 @@ async def test_order_number_only_in_subject_survives_guard(env):
 
     await svc.process_cycle(now=NOW)
 
-    assert env.orders.storage[1].store_order_number == "113-1234567-1234567"
+    subs = await env.suborders.list_for_order(1)
+    assert [s.store_order_number for s in subs] == ["113-1234567-1234567"]
 
 
 async def test_dismissed_track_not_resurrected_by_automation(env):
@@ -305,6 +310,134 @@ async def test_unexpected_llm_crash_does_not_stall_queue(env):
     assert env.emails.storage[10].attempts == 1
     assert env.emails.storage[10].next_attempt_at is not None
     assert env.emails.storage[11].attempts == 1
+
+
+def shipped_with_number(number: str, track="1Z999AA10123456784") -> EmailExtraction:
+    return EmailExtraction(
+        event_type=EmailEventType.SHIPPED,
+        confidence=0.95,
+        store_domain="amazon.com",
+        order_number=number,
+        tracking_numbers=[ExtractedTrack(number=track, carrier="ups")],
+        carrier="ups",
+        summary="Amazon отправил посылку",
+    )
+
+
+class TestNumberFirstMatching:
+    """Жёсткая привязка по номеру заказа магазина — ядро правки конвейера."""
+
+    async def test_exact_number_beats_age_and_status_filter(self, env):
+        """Старый заказ вне пула кандидатов всё равно находится по номеру."""
+        env.orders.seed(make_order(id=1, store="Amazon"))  # свежий «чужой» заказ
+        old = make_order(id=2, store="Amazon", status=OrderStatus.AT_WAREHOUSE)
+        env.orders.seed(old, order_number="113-1111111-1111111")
+        env.emails.seed_entry(
+            id=10, body_text="Order 113-1111111-1111111 shipped: 1Z999AA10123456784"
+        )
+        svc = env.mail_service(StubLLM(shipped_with_number("113-1111111-1111111")))
+
+        await svc.process_cycle(now=NOW)
+
+        track = await env.tracks.get_by_number("1Z999AA10123456784")
+        assert track.order_id == 2  # не «единственный активный заказ Amazon»
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED  # чужой не тронут
+
+    async def test_unknown_number_blocks_heuristic_autolink(self, env):
+        """Номер в письме есть, но ни с чем не совпал — только подсказка."""
+        env.orders.seed(make_order(id=1, store="Amazon"))
+        env.emails.seed_entry(
+            id=10, body_text="Order 999-0000000-0000000 shipped: 1Z999AA10123456784"
+        )
+        svc = env.mail_service(StubLLM(shipped_with_number("999-0000000-0000000")))
+
+        await svc.process_cycle(now=NOW)
+
+        track = await env.tracks.get_by_number("1Z999AA10123456784")
+        assert track.order_id is None
+        assert track.match_status == TrackMatchStatus.OPEN
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED
+        reasons = [e.get("details", {}).get("reason") for e in env.emails.events]
+        assert "order_number_not_found" in reasons
+
+    async def test_foreign_number_on_known_track_goes_to_manual_review(self, env):
+        """Трек ведёт на заказ A, номер в письме — на заказ B: разбирает человек."""
+        env.orders.seed(make_order(id=1, store="Amazon", status=OrderStatus.PURCHASED))
+        env.orders.seed(
+            make_order(id=2, store="Amazon"), order_number="113-2222222-2222222"
+        )
+        await env.tracks.add(
+            tracking_number="1Z999AA10123456784",
+            carrier="ups",
+            order_id=1,
+            suborder_id=None,
+            source="email",
+            email_log_id=None,
+            match_status="linked",
+            candidates=None,
+            note=None,
+        )
+        env.emails.seed_entry(
+            id=10, body_text="Order 113-2222222-2222222: 1Z999AA10123456784"
+        )
+        svc = env.mail_service(StubLLM(shipped_with_number("113-2222222-2222222")))
+
+        stats = await svc.process_cycle(now=NOW)
+
+        assert stats.manual == 1
+        assert env.emails.storage[10].processing_status == EmailProcessingStatus.MANUAL_REVIEW
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED  # чужой не двинут
+
+    async def test_ambiguous_suborder_lands_in_manual_review(self, env):
+        """Несколько активных подзаказов и трек без подзаказа — не молчим."""
+        env.orders.seed(make_order(id=1, store="Amazon"))
+        env.suborders.seed(order_id=1, store_order_number="B-2")  # второй подзаказ
+        await env.tracks.add(
+            tracking_number="1Z999AA10123456784",
+            carrier="ups",
+            order_id=1,
+            suborder_id=None,  # трек заведён руками, подзаказ неизвестен
+            source="manual",
+            email_log_id=None,
+            match_status="linked",
+            candidates=None,
+            note=None,
+        )
+        env.emails.seed_entry(id=10, body_text="Shipped: 1Z999AA10123456784")
+        svc = env.mail_service(StubLLM(shipped_extraction()))
+
+        stats = await svc.process_cycle(now=NOW)
+
+        assert stats.manual == 1
+        assert env.emails.storage[10].processing_status == EmailProcessingStatus.MANUAL_REVIEW
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED
+
+    async def test_number_resolves_suborder_of_manual_track(self, env):
+        """Тот же случай, но номер в письме указывает подзаказ — двигаем его."""
+        env.orders.seed(make_order(id=1, store="Amazon"), order_number="B-1")
+        env.suborders.seed(order_id=1, store_order_number="B-2")
+        await env.tracks.add(
+            tracking_number="1Z999AA10123456784",
+            carrier="ups",
+            order_id=1,
+            suborder_id=None,
+            source="manual",
+            email_log_id=None,
+            match_status="linked",
+            candidates=None,
+            note=None,
+        )
+        env.emails.seed_entry(id=10, body_text="Order B-1 shipped: 1Z999AA10123456784")
+        svc = env.mail_service(StubLLM(shipped_with_number("B-1")))
+
+        await svc.process_cycle(now=NOW)
+
+        subs = await env.suborders.list_for_order(1)
+        assert [s.status for s in subs] == [OrderStatus.SHIPPED, OrderStatus.PURCHASED]
+        # агрегат по отстающему подзаказу
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED
+        track = await env.tracks.get_by_number("1Z999AA10123456784")
+        assert track.suborder_id == subs[0].id  # подзаказ проставлен треку
 
 
 async def test_email_resolved_during_llm_call_not_applied_twice(env):

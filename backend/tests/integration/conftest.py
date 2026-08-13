@@ -19,7 +19,7 @@ TEST_DSN = os.environ.get(
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 
 TABLES = (
-    "email_event, order_status_history, payments, tracks, email_log, "
+    "email_event, order_status_history, payments, tracks, suborders, email_log, "
     "orders, flights, clients, login_bans"
 )
 
