@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,18 @@ from crm.application.interfaces.repositories import (
 )
 from crm.application.interfaces.uow import UnitOfWork
 from crm.domain import rules
+
+_DOMAIN_RE = re.compile(r"[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+")
+
+
+def extract_domain(text: str) -> str | None:
+    """Домен из поля «Магазин»: байер обычно пишет его доменом (kuiu.com)
+    или вставляет URL. Свободный текст («местный магазин») — None."""
+    t = (text or "").strip().lower()
+    t = re.sub(r"^https?://", "", t)
+    t = t.split("/", 1)[0].split("?", 1)[0]
+    t = t.removeprefix("www.").rstrip(".")
+    return t if _DOMAIN_RE.fullmatch(t) else None
 
 # Публичные имена полей API ↔ ключи app_settings
 API_TO_KEY: dict[str, str] = {
@@ -103,3 +116,23 @@ class SettingsService:
                     for domain in added:
                         await self._emails.requeue_filtered_domain(domain)
         return await self.view()
+
+    async def ensure_whitelist_domain(self, domain: str) -> bool:
+        """Добавить домен в белый список почты, если его там ещё нет
+        (с учётом поддоменов: smile.amazon.com покрыт amazon.com).
+        Отфильтрованные письма домена возвращаются в очередь обработки.
+        True — домен реально добавлен."""
+        domain = domain.strip().lower().lstrip("@")
+        if not domain:
+            return False
+        current = [
+            str(d) for d in (await self._settings.get("mail.whitelist_domains") or [])
+        ]
+        if any(domain == d or domain.endswith("." + d) for d in current if d):
+            return False
+        async with self._uow:
+            await self._settings.set_many(
+                {"mail.whitelist_domains": sorted([*current, domain])}
+            )
+            await self._emails.requeue_filtered_domain(domain)
+        return True

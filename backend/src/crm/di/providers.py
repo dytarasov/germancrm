@@ -134,7 +134,6 @@ class RequestProvider(Provider):
     login_bans = provide(PgLoginBanRepository, provides=LoginBanRepository)
 
     client_service = provide(ClientService)
-    order_service = provide(OrderService)
     track_service = provide(TrackService)
     payment_service = provide(PaymentService)
     flight_service = provide(FlightService)
@@ -142,6 +141,33 @@ class RequestProvider(Provider):
     report_service = provide(ReportService)
     settings_service = provide(SettingsService)
     security_service = provide(SecurityService)
+
+    @provide
+    def order_service(
+        self,
+        orders: OrderRepository,
+        order_items: OrderItemRepository,
+        tracks: TrackRepository,
+        payments: PaymentRepository,
+        history: StatusHistoryRepository,
+        settings_repo: SettingsRepository,
+        suborders: SuborderRepository,
+        uow: UnitOfWork,
+        settings_service: SettingsService,
+    ) -> OrderService:
+        # settings_service опционален в конструкторе только ради unit-тестов —
+        # в приложении он подключён всегда (автопополнение белого списка почты)
+        return OrderService(
+            orders,
+            order_items,
+            tracks,
+            payments,
+            history,
+            settings_repo,
+            suborders,
+            uow,
+            settings_service,
+        )
 
     @provide
     def llm(

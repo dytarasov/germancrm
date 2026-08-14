@@ -17,6 +17,7 @@ from crm.application.interfaces.repositories import (
     TrackRepository,
 )
 from crm.application.interfaces.uow import UnitOfWork
+from crm.application.services.settings_service import SettingsService, extract_domain
 from crm.domain import rules
 from crm.domain.clock import business_today
 from crm.domain.enums import OrderStatus, StatusSource, TrackMatchStatus
@@ -78,6 +79,7 @@ class OrderService:
         app_settings: SettingsRepository,
         suborders: SuborderRepository,
         uow: UnitOfWork,
+        settings_service: SettingsService | None = None,
     ) -> None:
         self._orders = orders
         self._items = items
@@ -87,6 +89,7 @@ class OrderService:
         self._app_settings = app_settings
         self._suborders = suborders
         self._uow = uow
+        self._settings_service = settings_service
 
     # ---------- чтение ----------
 
@@ -144,6 +147,7 @@ class OrderService:
             "Создан заказ #%s (клиент %s, магазин %s, $%s)",
             order.id, order.client_id, order.store, order.purchase_price_usd,
         )
+        await self._sync_store_whitelist(order.store)
         return await self.get_detail(order.id)
 
     async def update(self, order_id: int, fields: dict[str, Any]) -> OrderDetail:
@@ -193,7 +197,26 @@ class OrderService:
                     order_id, fields["commission_usd"], fields["weight_kg"],
                 )
             await self._orders.update_fields(order_id, fields)
+        if isinstance(fields.get("store"), str):
+            await self._sync_store_whitelist(fields["store"])
         return await self.get_detail(order_id)
+
+    async def _sync_store_whitelist(self, store: str) -> None:
+        """Магазин, записанный доменом, попадает в белый список почты сам —
+        письма нового магазина не отфильтруются, а старые вернутся в очередь.
+
+        Вне транзакции заказа и в try/except: проблема с настройками почты
+        не должна мешать созданию заказа."""
+        if self._settings_service is None:
+            return
+        domain = extract_domain(store)
+        if domain is None:
+            return
+        try:
+            if await self._settings_service.ensure_whitelist_domain(domain):
+                log.info("Магазин %s добавлен в белый список почты", domain)
+        except Exception:  # noqa: BLE001
+            log.exception("Не удалось добавить %s в белый список почты", domain)
 
     async def delete(self, order_id: int) -> None:
         async with self._uow:

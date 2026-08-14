@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from crm.application.services.order_service import OrderService
+from crm.application.services.settings_service import SettingsService, extract_domain
 from crm.domain.enums import OrderStatus, StatusSource
 from crm.domain.exceptions import (
     CommissionRequiredError,
@@ -10,6 +11,8 @@ from crm.domain.exceptions import (
     InvalidStatusTransitionError,
 )
 from tests.unit.fakes import (
+    FakeEmailRepository,
+    FakeGmailStateRepository,
     FakeOrderItemRepository,
     FakeOrderRepository,
     FakePaymentRepository,
@@ -343,6 +346,91 @@ class TestOrderItems:
 
         with pytest.raises(NotFoundError):
             await service.delete_item(2, item.id)
+
+
+def test_extract_domain():
+    assert extract_domain("Kuiu.com") == "kuiu.com"
+    assert extract_domain("https://www.purebulk.com/products/x?y=1") == "purebulk.com"
+    assert extract_domain("smile.amazon.com") == "smile.amazon.com"
+    assert extract_domain("seedworldusa") is None  # без точки — не домен
+    assert extract_domain("местный магазин") is None
+    assert extract_domain("") is None
+
+
+class TestStoreWhitelist:
+    """Магазин, записанный доменом, сам попадает в белый список почты."""
+
+    def _service(self, orders, history, items, suborders, settings_repo):
+        settings_service = SettingsService(
+            settings_repo,
+            FakeGmailStateRepository(),
+            FakeEmailRepository(),
+            FakeUnitOfWork(),
+        )
+        return OrderService(
+            orders,
+            items,
+            FakeTrackRepository(),
+            FakePaymentRepository(),
+            history,
+            settings_repo,
+            suborders,
+            FakeUnitOfWork(),
+            settings_service,
+        )
+
+    async def test_domain_store_added_to_whitelist(
+        self, orders, history, items, suborders
+    ):
+        repo = FakeSettingsRepository({"mail.whitelist_domains": ["amazon.com"]})
+        service = self._service(orders, history, items, suborders, repo)
+        await service.create(
+            {
+                "client_id": 1,
+                "store": "Kuiu.com",
+                "items": "Куртка",
+                "purchase_price_usd": Decimal("100"),
+            }
+        )
+        assert "kuiu.com" in repo.values["mail.whitelist_domains"]
+        assert "amazon.com" in repo.values["mail.whitelist_domains"]
+
+    async def test_free_text_store_ignored(self, orders, history, items, suborders):
+        repo = FakeSettingsRepository({"mail.whitelist_domains": ["amazon.com"]})
+        service = self._service(orders, history, items, suborders, repo)
+        await service.create(
+            {
+                "client_id": 1,
+                "store": "seedworldusa",
+                "items": "Семена",
+                "purchase_price_usd": Decimal("10"),
+            }
+        )
+        assert repo.values["mail.whitelist_domains"] == ["amazon.com"]
+
+    async def test_subdomain_covered_by_parent_not_duplicated(
+        self, orders, history, items, suborders
+    ):
+        repo = FakeSettingsRepository({"mail.whitelist_domains": ["amazon.com"]})
+        service = self._service(orders, history, items, suborders, repo)
+        await service.create(
+            {
+                "client_id": 1,
+                "store": "smile.amazon.com",
+                "items": "Книга",
+                "purchase_price_usd": Decimal("10"),
+            }
+        )
+        assert repo.values["mail.whitelist_domains"] == ["amazon.com"]
+
+    async def test_store_change_updates_whitelist(
+        self, orders, history, items, suborders
+    ):
+        repo = FakeSettingsRepository({"mail.whitelist_domains": []})
+        service = self._service(orders, history, items, suborders, repo)
+        orders.seed(make_order(id=1, store="старое название"))
+        await service.update(1, {"store": "therarete.com"})
+        assert "therarete.com" in repo.values["mail.whitelist_domains"]
 
 
 class TestAutoAdvance:
