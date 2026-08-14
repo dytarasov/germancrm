@@ -412,6 +412,56 @@ class TestNumberFirstMatching:
         assert env.emails.storage[10].processing_status == EmailProcessingStatus.MANUAL_REVIEW
         assert env.orders.storage[1].status == OrderStatus.PURCHASED
 
+    async def test_shipped_without_track_advances_by_exact_number(self, env):
+        """eBay-кейс: «Shipped with UPS», трек спрятан за кнопкой, в письме его
+        нет — но номер заказа совпал точно, статус двигаем без трека."""
+        env.orders.seed(
+            make_order(id=1, store="Ebay.com"), order_number="07-15028-84840"
+        )
+        env.emails.seed_entry(
+            id=10,
+            from_addr="ebay@ebay.com",
+            from_domain="ebay.com",
+            subject="Your package is now with its carrier!",
+            body_text="Shipped with UPS. Order number: 07-15028-84840",
+        )
+        extraction = EmailExtraction(
+            event_type=EmailEventType.SHIPPED,
+            confidence=0.95,
+            store_domain="ebay.com",
+            order_number="07-15028-84840",
+            tracking_numbers=[],  # трек за кнопкой «Track package»
+            carrier="ups",
+            summary="eBay: посылка передана перевозчику",
+        )
+        svc = env.mail_service(StubLLM(extraction))
+
+        stats = await svc.process_cycle(now=NOW)
+
+        assert stats.processed == 1 and stats.manual == 0
+        assert env.orders.storage[1].status == OrderStatus.SHIPPED
+        assert env.emails.storage[10].processing_status == EmailProcessingStatus.PROCESSED
+
+    async def test_shipped_without_track_and_without_number_still_manual(self, env):
+        """Ни трека, ни совпавшего номера — по-прежнему ручной разбор."""
+        env.orders.seed(make_order(id=1, store="Amazon"))
+        env.emails.seed_entry(id=10, body_text="Your order is on its way!")
+        extraction = EmailExtraction(
+            event_type=EmailEventType.SHIPPED,
+            confidence=0.95,
+            store_domain="amazon.com",
+            order_number=None,
+            tracking_numbers=[],
+            carrier=None,
+            summary="Отправлено",
+        )
+        svc = env.mail_service(StubLLM(extraction))
+
+        stats = await svc.process_cycle(now=NOW)
+
+        assert stats.manual == 1
+        assert env.orders.storage[1].status == OrderStatus.PURCHASED
+
     async def test_number_resolves_suborder_of_manual_track(self, env):
         """Тот же случай, но номер в письме указывает подзаказ — двигаем его."""
         env.orders.seed(make_order(id=1, store="Amazon"), order_number="B-1")

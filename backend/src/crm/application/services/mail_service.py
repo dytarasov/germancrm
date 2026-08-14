@@ -580,6 +580,19 @@ class MailService:
 
         if event == EmailEventType.SHIPPED:
             if not e.tracking_numbers:
+                # Магазины часто прячут трек за кнопкой «Track package» (eBay).
+                # Точное совпадение номера заказа даёт однозначную цель —
+                # статус двигаем и без трека; сам трек приедет письмом склада.
+                if len(number_hits) == 1 and confident_allowed:
+                    hit = number_hits[0]
+                    outcome = await self._advance(
+                        row, e, hit.order_id, OrderStatus.SHIPPED, suborder_id=hit.id
+                    )
+                    return (
+                        EmailProcessingStatus.MANUAL_REVIEW
+                        if outcome == "ambiguous"
+                        else EmailProcessingStatus.PROCESSED
+                    )
                 await self._emails.add_event(
                     email_id=row.id,
                     event_type=event,
