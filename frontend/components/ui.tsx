@@ -206,7 +206,9 @@ export function Modal({
             ×
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:flex-none sm:pb-4">
+        {/* min-h-0 обязателен: без него flex-элемент не отдаёт высоту и
+            внутренний скролл не включается — контент вытекает за диалог */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-4">
           {children}
         </div>
       </div>
