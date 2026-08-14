@@ -65,15 +65,18 @@ make up-prod     # docker compose -f docker-compose.yml -f docker-compose.prod.y
 
 В `.env` на сервере обязательно: свои `APP_PASSWORD`, `SECRET_KEY`, `POSTGRES_PASSWORD` (с дефолтными приложение не стартует вне localhost), `COOKIE_SECURE=true`, `DOMAIN=shaprivezu.com`, `BACKEND_PORT=127.0.0.1:8000`, `FRONTEND_PORT=127.0.0.1:3000`, `PUBLIC_BASE_URL`/`FRONTEND_BASE_URL=https://shaprivezu.com`.
 
-Обновление на сервере — всегда одной и той же командой:
+Обновление на сервере — всегда одной и той же командой (сборка прямо там):
 
 ```bash
 cd /opt/shaprivezu && git pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 Заметки:
-- Сервер маленький (1 ГБ RAM) — фронтенд там не собирается: образы `shaprivezu-backend`/`shaprivezu-frontend` собираются локально под `linux/amd64` и заливаются `docker save | ssh docker load`, на сервере `up -d --no-build`.
+- Сервер маленький (1 ГБ RAM), но с 1.5 ГБ swap фронтенд собирается на месте
+  (медленно, несколько минут на 1 vCPU). Запасной путь, если сборка упрётся в
+  память: собрать локально `docker build --platform linux/amd64` и залить
+  `docker save | ssh docker load`, на сервере `up -d --no-build`.
 - **Не используйте `docker compose restart <сервис>`** — restart не поднимает зависимости (перезапуск backend при остановленном postgres). Бэкенд это переживёт (ждёт БД до 90 с и дальше перезапускается политикой docker), но правильная команда — `up -d`.
 - Перенос данных: `make backup` → restore (refresh token Gmail переезжает вместе с БД, реавторизация не нужна). Все вызовы Gmail/OpenRouter — исходящие.
 
