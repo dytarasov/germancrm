@@ -4,6 +4,8 @@ CRM для байера: выкуп товаров в интернет-мага�
 
 **Стек**: FastAPI + dishka + asyncpg (чистый SQL, без ORM) + PostgreSQL 16 · Next.js 15 + Tailwind v4 + TanStack Query · docker compose.
 
+> **Разворачиваете с нуля на своём сервере?** Есть пошаговый гайд без предположений о подготовке — от аренды VPS до обновлений одной командой: **[SETUP.md](SETUP.md)**.
+
 ## Запуск одной кнопкой
 
 Нужен Docker Desktop. Дальше:
@@ -56,6 +58,8 @@ make test-int    # integration: поднимет временный Postgres н�
 ```
 
 ## Прод (VPS + домен)
+
+Полная инструкция по развёртыванию с нуля (аренда VPS, домен, `.env`, обновления) — в **[SETUP.md](SETUP.md)**. Ниже — краткая версия для тех, кто уже в теме.
 
 Прод развёрнут на https://shaprivezu.com (каталог `/opt/shaprivezu` на сервере). Схема: тот же compose + оверлей `docker-compose.prod.yml` с Caddy — он слушает 80/443 и сам получает/продлевает Let's Encrypt-сертификат; backend и frontend привязаны к loopback и наружу не торчат.
 
