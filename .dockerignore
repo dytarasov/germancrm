@@ -1,0 +1,18 @@
+# Контекст сборки backend — корень репо (ради uv.lock из workspace):
+# не тащим в докер-демон ничего лишнего. Frontend собирается со своим
+# контекстом ./frontend и этим файлом не управляется.
+.git
+.idea
+.venv
+.env*
+backups
+deploy
+frontend
+*.md
+Makefile
+docker-compose*.yml
+backend/tests
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/__pycache__

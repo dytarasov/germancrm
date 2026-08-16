@@ -52,6 +52,11 @@ class TestClientIp:
     def test_garbage_xff_ignored(self):
         assert client_ip(_request("not-an-ip, ,")) == ("127.0.0.1", False)
 
+    def test_xff_from_public_peer_ignored(self):
+        # соединение пришло НЕ от своего прокси (публичный пир) —
+        # весь заголовок подделка, баним сам адрес сокета
+        assert client_ip(_request("5.6.7.8", client_host="9.9.9.9")) == ("9.9.9.9", True)
+
 
 class TestIsPublicIp:
     def test_common_cases(self):

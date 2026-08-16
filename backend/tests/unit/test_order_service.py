@@ -193,6 +193,19 @@ class TestCancelRefund:
         )
         assert detail.order.commission_usd == Decimal("100")
 
+    async def test_refund_explicit_null_commission_rejected(self, service, orders):
+        """Явный commission_usd=null стёр бы комиссию и молча выкинул заказ
+        из отчёта прибыли — такое запрещаем на уровне сервиса."""
+        orders.seed(make_order(id=1, commission_usd=Decimal("100")))
+        with pytest.raises(DomainValidationError):
+            await service.refund(
+                1,
+                refunded_amount_usd=Decimal("100"),
+                commission_usd=None,
+                commission_provided=True,
+            )
+        assert (await service.get_detail(1)).order.commission_usd == Decimal("100")
+
     async def test_refund_cancelled_forbidden(self, service, orders):
         orders.seed(make_order(id=1, status=OrderStatus.CANCELLED))
         with pytest.raises(InvalidStatusTransitionError):

@@ -16,7 +16,10 @@ services:
       retries: 30
 
   backend:
-    build: ./backend
+    build:
+      # контекст — корень репо: uv.lock лежит там (uv workspace)
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
     environment:
       DATABASE_DSN: postgresql://crm:${POSTGRES_PASSWORD:-crm}@postgres:5432/crm

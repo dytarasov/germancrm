@@ -329,6 +329,12 @@ class OrderService:
                 raise InvalidStatusTransitionError("Отменённый заказ нельзя перевести в возврат")
             fields: dict[str, Any] = {"refunded_amount_usd": refunded_amount_usd}
             if commission_provided:
+                if commission_usd is None:
+                    # NULL-комиссия выкинула бы возврат из отчёта прибыли
+                    # (_PERIOD_COND требует commission_usd IS NOT NULL)
+                    raise DomainValidationError(
+                        "Комиссию нельзя стереть: укажите сумму (можно 0) или не передавайте поле"
+                    )
                 fields["commission_usd"] = commission_usd
             if order.status != OrderStatus.REFUNDED:
                 # refunded_at ставим один раз: повторный refund лишь правит сумму
