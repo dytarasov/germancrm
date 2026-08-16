@@ -41,14 +41,16 @@ SELECT o.*, c.name AS client_name,
        COALESCE(p.paid, 0) AS paid_usd,
        COALESCE(t.cnt, 0) AS tracks_count,
        COALESCE(s.cnt, 0) AS suborders_count,
-       s.numbers AS order_numbers
+       s.numbers AS order_numbers,
+       s.eta_on AS eta_on
 FROM orders o
 JOIN clients c ON c.id = o.client_id
 LEFT JOIN LATERAL (SELECT SUM(amount_usd) AS paid FROM payments WHERE order_id = o.id) p ON TRUE
 LEFT JOIN LATERAL (SELECT COUNT(*) AS cnt FROM tracks WHERE order_id = o.id) t ON TRUE
 LEFT JOIN LATERAL (
     SELECT COUNT(*) AS cnt,
-           ARRAY_REMOVE(ARRAY_AGG(store_order_number ORDER BY id), NULL) AS numbers
+           ARRAY_REMOVE(ARRAY_AGG(store_order_number ORDER BY id), NULL) AS numbers,
+           MAX(eta_on) FILTER (WHERE status IN ('purchased','shipped')) AS eta_on
     FROM suborders WHERE order_id = o.id
 ) s ON TRUE
 """

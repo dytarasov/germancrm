@@ -75,6 +75,7 @@ def record_to_order_row(r: asyncpg.Record) -> OrderListRow:
         tracks_count=r["tracks_count"] or 0,
         suborders_count=r["suborders_count"] or 0,
         order_numbers=list(r["order_numbers"] or []),
+        eta_on=r["eta_on"],
     )
 
 
@@ -87,6 +88,7 @@ def record_to_suborder(r: asyncpg.Record) -> Suborder:
         status=OrderStatus(r["status"]),
         created_at=r["created_at"],
         updated_at=r["updated_at"],
+        eta_on=r["eta_on"],
     )
 
 

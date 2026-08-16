@@ -153,6 +153,14 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
         <div className="flex items-center gap-2.5">
           <RouteStepperMini status={order.status} />
           <StatusBadge status={order.status} />
+          {order.eta_on && (
+            <span
+              className="text-[11.5px] whitespace-nowrap text-muted"
+              title="Ожидаемое прибытие на склад США (из писем магазина)"
+            >
+              ≈ {fmtDate(order.eta_on)}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
@@ -216,6 +224,9 @@ export function OrderCard({ order, showClient }: { order: OrderListItem; showCli
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <RouteStepperMini status={order.status} />
           <StatusBadge status={order.status} />
+          {order.eta_on && (
+            <span className="text-[11.5px] text-muted">≈ {fmtDate(order.eta_on)}</span>
+          )}
           {order.commission_usd === null ? (
             <NoCommissionBadge />
           ) : (

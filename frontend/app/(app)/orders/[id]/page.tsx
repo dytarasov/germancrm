@@ -863,6 +863,14 @@ function SubordersSection({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[12px] font-medium text-muted">Подзаказ {i + 1}</span>
                 {(multi || orderTerminal) && <StatusBadge status={s.status} />}
+                {s.eta_on && (s.status === "purchased" || s.status === "shipped") && (
+                  <span
+                    className="text-[11.5px] text-muted"
+                    title="Ожидаемое прибытие на склад США (из писем магазина)"
+                  >
+                    ≈ приедет {fmtDate(s.eta_on)}
+                  </span>
+                )}
                 {subTracks.length > 0 && (
                   <span className="min-w-0 truncate text-[12px] text-muted">
                     {subTracks.map((t) => (

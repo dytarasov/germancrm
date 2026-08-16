@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from crm.application.interfaces.gdrive import DrivePort, DriveScopeError
@@ -91,6 +91,7 @@ def guard_extraction(extraction: EmailExtraction, body_text: str | None) -> Emai
         carrier=extraction.carrier,
         summary=extraction.summary,
         reasoning=extraction.reasoning,
+        eta=extraction.eta,
     )
 
 
@@ -122,7 +123,22 @@ def enrich_extraction(extraction: EmailExtraction) -> EmailExtraction:
         carrier=extraction.carrier,
         summary=extraction.summary,
         reasoning=extraction.reasoning,
+        eta=extraction.eta,
     )
+
+
+def parse_eta(raw: str | None, email_today) -> date | None:
+    """Валидация извлечённой LLM даты доставки: ISO-формат и разумное окно
+    относительно даты письма (не прошлое, не дальше трёх месяцев)."""
+    if not raw:
+        return None
+    try:
+        eta = date.fromisoformat(raw.strip())
+    except ValueError:
+        return None
+    if eta < email_today - timedelta(days=2) or eta > email_today + timedelta(days=90):
+        return None
+    return eta
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,13 +494,39 @@ class MailService:
         if event == EmailEventType.OTHER:
             return EmailProcessingStatus.IGNORED
 
+        # Дата письма и точный поиск номера нужны и ранним веткам (ETA).
+        email_today = (
+            row.sent_at.astimezone(BUSINESS_TZ).date() if row.sent_at else business_today()
+        )
+        number_hits = (
+            await self._suborders.find_by_number(normalize_number(e.order_number))
+            if e.order_number
+            else []
+        )
+
         if event == EmailEventType.DELIVERY_UPDATE:
+            # Промежуточные статусы перевозчика часто несут ETA — применяем,
+            # когда цель однозначна: по известному треку или точному номеру.
+            eta_sub_id: int | None = None
+            for tn in e.tracking_numbers:
+                track = await self._tracks.get_by_number(
+                    normalize_tracking_number(tn.number)
+                )
+                if track is not None and track.suborder_id is not None:
+                    eta_sub_id = track.suborder_id
+                    break
+            if eta_sub_id is None and len(number_hits) == 1:
+                eta_sub_id = number_hits[0].id
+            applied_eta = await self._apply_eta(e, eta_sub_id, email_today)
+            details: dict = {"summary": e.summary}
+            if applied_eta is not None:
+                details["eta"] = applied_eta.isoformat()
             await self._emails.add_event(
                 email_id=row.id,
                 event_type=event,
-                order_id=None,
+                order_id=number_hits[0].order_id if number_hits else None,
                 action=EmailAction.INFO,
-                details={"summary": e.summary},
+                details=details,
             )
             return EmailProcessingStatus.PROCESSED
 
@@ -504,22 +546,15 @@ class MailService:
         auto_threshold = int(await self._setting("matching.auto_threshold"))
         min_confidence = float(await self._setting("llm.auto_min_confidence"))
         confident_allowed = e.confidence >= min_confidence
-        # Свежесть кандидатов меряем от даты письма: старое письмо не должно
-        # считать «новым» заказ, созданный сильно позже него.
-        email_today = (
-            row.sent_at.astimezone(BUSINESS_TZ).date() if row.sent_at else business_today()
-        )
-        # Жёсткая привязка: извлечённый номер заказа магазина сперва ищется
-        # точным совпадением по подзаказам — без ограничений по возрасту и статусу.
-        number_hits = (
-            await self._suborders.find_by_number(normalize_number(e.order_number))
-            if e.order_number
-            else []
-        )
+        # Свежесть кандидатов меряется от даты письма (email_today): старое письмо
+        # не должно считать «новым» заказ, созданный сильно позже него.
+        # number_hits — жёсткая привязка: точное совпадение номера магазина
+        # по подзаказам, без ограничений по возрасту и статусу.
 
         if event == EmailEventType.ORDER_CONFIRMATION:
             if number_hits:
-                # номер уже записан у подзаказа — просто фиксируем факт
+                # номер уже записан у подзаказа — фиксируем факт (+ETA, если есть)
+                await self._apply_eta(e, number_hits[0].id, email_today)
                 await self._emails.add_event(
                     email_id=row.id,
                     event_type=event,
@@ -561,6 +596,7 @@ class MailService:
                 await self._suborders.update(
                     target_sub.id, {"store_order_number": e.order_number}
                 )
+                await self._apply_eta(e, target_sub.id, email_today)
                 await self._emails.add_event(
                     email_id=row.id,
                     event_type=event,
@@ -585,6 +621,7 @@ class MailService:
                 # статус двигаем и без трека; сам трек приедет письмом склада.
                 if len(number_hits) == 1 and confident_allowed:
                     hit = number_hits[0]
+                    await self._apply_eta(e, hit.id, email_today)
                     outcome = await self._advance(
                         row, e, hit.order_id, OrderStatus.SHIPPED, suborder_id=hit.id
                     )
@@ -683,6 +720,7 @@ class MailService:
             ):
                 sub_id = number_hits[0].id
                 await self._tracks.update(existing.id, {"suborder_id": sub_id})
+            await self._apply_eta(e, sub_id, email_today)
             # Двигаем статус, только если событию можно доверять —
             # confidence относится к event_type.
             if confident_allowed:
@@ -727,6 +765,7 @@ class MailService:
                     candidates=None,
                     note=None,
                 )
+            await self._apply_eta(e, hit.id, email_today)
             await self._emails.add_event(
                 email_id=row.id,
                 event_type=e.event_type,
@@ -791,6 +830,7 @@ class MailService:
                         candidates=None,
                         note=None,
                     )
+                await self._apply_eta(e, target_sub_id, email_today)
                 await self._emails.add_event(
                     email_id=row.id,
                     event_type=e.event_type,
@@ -945,6 +985,19 @@ class MailService:
             details={"summary": e.summary, "reason": "warehouse_no_match"},
         )
         return EmailProcessingStatus.MANUAL_REVIEW
+
+    async def _apply_eta(
+        self, e: EmailExtraction, suborder_id: int | None, email_today: date
+    ) -> date | None:
+        """Записать ожидаемую дату доставки в подзаказ, если цель известна,
+        а дата прошла валидацию. Возвращает применённую дату."""
+        if suborder_id is None:
+            return None
+        eta = parse_eta(e.eta, email_today)
+        if eta is None:
+            return None
+        await self._suborders.update(suborder_id, {"eta_on": eta})
+        return eta
 
     async def _advance(
         self,

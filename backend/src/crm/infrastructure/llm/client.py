@@ -54,6 +54,7 @@ class _ExtractionModel(BaseModel):
     order_number: str | None = None
     tracking_numbers: list[_TrackingNumberModel] = Field(default_factory=list)
     carrier: str | None = None
+    eta: str | None = None
     summary: str = ""
 
 
@@ -71,6 +72,7 @@ JSON_SCHEMA = {
             "order_number",
             "tracking_numbers",
             "carrier",
+            "eta",
             "summary",
         ],
         "properties": {
@@ -139,6 +141,12 @@ JSON_SCHEMA = {
                     {"type": "null"},
                 ],
                 "description": "Основной перевозчик письма, если однозначен",
+            },
+            "eta": {
+                "type": ["string", "null"],
+                "description": "Дата ожидаемой доставки в формате YYYY-MM-DD, если "
+                "письмо её явно называет («Arriving Thursday, August 20» — считать "
+                "от даты письма); null, если даты нет",
             },
             "summary": {
                 "type": "string",
@@ -246,6 +254,7 @@ class OpenRouterLLM:
                     for t in parsed.tracking_numbers
                 ],
                 carrier=parsed.carrier,
+                eta=parsed.eta,
                 summary=parsed.summary,
                 reasoning=parsed.reasoning or None,
             )

@@ -30,6 +30,8 @@ export interface OrderListItem {
   paid_usd: string;
   due_usd: string | null;
   tracks_count: number;
+  /** ожидаемое прибытие едущих к складу посылок (из писем), ориентир */
+  eta_on: string | null;
 }
 
 export interface StatusChange {
@@ -49,6 +51,7 @@ export interface Suborder {
   store_order_number: string | null;
   amount_usd: string | null;
   status: OrderStatus;
+  eta_on: string | null;
 }
 
 export interface TrackCandidate {

@@ -78,6 +78,7 @@ class Suborder:
     status: OrderStatus
     created_at: datetime
     updated_at: datetime
+    eta_on: date | None = None  # ожидаемое прибытие посылки (из писем магазина)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +105,8 @@ class OrderListRow:
     suborders_count: int = 1
     # номера заказов магазина по всем подзаказам (без NULL), в порядке создания
     order_numbers: list[str] = field(default_factory=list)
+    # ближайший «горизонт» прибытия: MAX(eta_on) по посылкам, что ещё едут к складу
+    eta_on: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +246,7 @@ class EmailExtraction:
     carrier: str | None
     summary: str
     reasoning: str | None = None  # объяснение модели — для UI и отладки точности
+    eta: str | None = None  # ожидаемая дата доставки (YYYY-MM-DD), если письмо назвало
 
 
 @dataclass(frozen=True, slots=True)

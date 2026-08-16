@@ -11,7 +11,7 @@ from crm.domain.models import Suborder
 from crm.infrastructure.mappers.db_mappers import record_to_suborder
 from crm.infrastructure.repositories._sql import set_clause
 
-_UPDATABLE = {"store_order_number", "amount_usd", "status"}
+_UPDATABLE = {"store_order_number", "amount_usd", "status", "eta_on"}
 
 # Та же каноническая форма, что normalize_number в Python: только буквы/цифры, upper.
 _NORM_SQL = "upper(regexp_replace(store_order_number, '[^a-zA-Z0-9]+', '', 'g'))"

@@ -31,6 +31,7 @@ class SuborderOut(BaseModel):
     store_order_number: str | None
     amount_usd: Decimal | None
     status: str
+    eta_on: date | None
 
 
 class OrderCreate(BaseModel):
@@ -138,6 +139,8 @@ class OrderListItemOut(BaseModel):
     paid_usd: Decimal
     due_usd: Decimal | None
     tracks_count: int
+    # ожидаемое прибытие едущих к складу посылок (из писем), ориентир
+    eta_on: date | None
 
 
 class OrderDetailOut(OrderListItemOut):

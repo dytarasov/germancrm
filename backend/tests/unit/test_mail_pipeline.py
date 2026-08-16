@@ -490,6 +490,81 @@ class TestNumberFirstMatching:
         assert track.suborder_id == subs[0].id  # подзаказ проставлен треку
 
 
+class TestEta:
+    """ETA из писем: применяется только при однозначной цели и валидной дате."""
+
+    async def test_shipped_with_number_writes_eta(self, env):
+        env.orders.seed(make_order(id=1, store="Amazon"), order_number="113-1")
+        env.emails.seed_entry(
+            id=10, body_text="Order 113-1 shipped: 1Z999AA10123456784, arriving soon"
+        )
+        extraction = EmailExtraction(
+            event_type=EmailEventType.SHIPPED,
+            confidence=0.95,
+            store_domain="amazon.com",
+            order_number="113-1",
+            tracking_numbers=[ExtractedTrack(number="1Z999AA10123456784", carrier="ups")],
+            carrier="ups",
+            summary="Отправлено",
+            eta="2026-08-10",  # NOW = 6 августа → в окне
+        )
+        await env.mail_service(StubLLM(extraction)).process_cycle(now=NOW)
+
+        subs = await env.suborders.list_for_order(1)
+        assert str(subs[0].eta_on) == "2026-08-10"
+
+    async def test_delivery_update_refreshes_eta_by_known_track(self, env):
+        env.orders.seed(make_order(id=1, store="Amazon", status=OrderStatus.SHIPPED))
+        sub = (await env.suborders.list_for_order(1))[0]
+        await env.tracks.add(
+            tracking_number="1Z999AA10123456784",
+            carrier="ups",
+            order_id=1,
+            suborder_id=sub.id,
+            source="email",
+            email_log_id=None,
+            match_status="linked",
+            candidates=None,
+            note=None,
+        )
+        env.emails.seed_entry(id=10, body_text="In transit: 1Z999AA10123456784")
+        extraction = EmailExtraction(
+            event_type=EmailEventType.DELIVERY_UPDATE,
+            confidence=0.9,
+            store_domain=None,
+            order_number=None,
+            tracking_numbers=[ExtractedTrack(number="1Z999AA10123456784", carrier="ups")],
+            carrier="ups",
+            summary="В пути",
+            eta="2026-08-12",
+        )
+        stats = await env.mail_service(StubLLM(extraction)).process_cycle(now=NOW)
+
+        assert stats.processed == 1
+        subs = await env.suborders.list_for_order(1)
+        assert str(subs[0].eta_on) == "2026-08-12"
+
+    async def test_garbage_eta_ignored(self, env):
+        env.orders.seed(make_order(id=1, store="Amazon"), order_number="113-1")
+        env.emails.seed_entry(id=10, body_text="Order 113-1 shipped")
+        extraction = EmailExtraction(
+            event_type=EmailEventType.SHIPPED,
+            confidence=0.95,
+            store_domain="amazon.com",
+            order_number="113-1",
+            tracking_numbers=[],
+            carrier=None,
+            summary="Отправлено",
+            eta="2031-01-01",  # за пределами разумного окна
+        )
+        await env.mail_service(StubLLM(extraction)).process_cycle(now=NOW)
+
+        subs = await env.suborders.list_for_order(1)
+        assert subs[0].eta_on is None
+        # но статус по номеру всё равно продвинулся
+        assert env.orders.storage[1].status == OrderStatus.SHIPPED
+
+
 async def test_email_resolved_during_llm_call_not_applied_twice(env):
     """Гонка: пока LLM думал, письмо разобрали вручную — второй раз не применяем."""
     env.orders.seed(make_order(id=1, store="Amazon", status=OrderStatus.PURCHASED))

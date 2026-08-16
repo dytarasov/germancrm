@@ -10,6 +10,7 @@ from crm.application.services.matching import MatchCandidate, order_label
 from crm.application.services.order_service import OrderDetail
 from crm.application.services.settings_service import SettingsView
 from crm.domain import rules
+from crm.domain.enums import OrderStatus
 from crm.domain.models import (
     Client,
     ClientListItem,
@@ -91,6 +92,7 @@ def order_row_to_out(row: OrderListRow, today: date) -> OrderListItemOut:
         paid_usd=row.paid_usd,
         due_usd=rules.due_usd(o.purchase_price_usd, o.commission_usd, row.paid_usd),
         tracks_count=row.tracks_count,
+        eta_on=row.eta_on,
     )
 
 
@@ -113,6 +115,7 @@ def suborder_to_out(s: Suborder) -> SuborderOut:
         store_order_number=s.store_order_number,
         amount_usd=s.amount_usd,
         status=s.status.value,
+        eta_on=s.eta_on,
     )
 
 
@@ -139,6 +142,15 @@ def order_detail_to_out(detail: OrderDetail, today: date) -> OrderDetailOut:
         paid_usd=detail.paid_usd,
         due_usd=finance.due_usd,
         tracks_count=detail.tracks_count,
+        eta_on=max(
+            (
+                s.eta_on
+                for s in detail.suborders
+                if s.eta_on is not None
+                and s.status in (OrderStatus.PURCHASED, OrderStatus.SHIPPED)
+            ),
+            default=None,
+        ),
         est_weight_kg=o.est_weight_kg,
         comment=o.comment,
         refunded_amount_usd=o.refunded_amount_usd,
