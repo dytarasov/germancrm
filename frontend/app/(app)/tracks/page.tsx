@@ -8,12 +8,12 @@ import { api } from "@/lib/api";
 import type { OrderListItem, Track, TrackSuggestion } from "@/lib/api-types";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, Input, Section } from "@/components/ui";
-import { Combobox } from "@/components/combobox";
 import { toastError, toastSaved } from "@/components/toasts";
 
 function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[] }) {
   const qc = useQueryClient();
-  const [manual, setManual] = useState("");
+  // живой поиск вместо выпадашки: результаты — такие же строки, как кандидаты
+  const [q, setQ] = useState("");
 
   const { data: suggestions } = useQuery({
     queryKey: ["track-suggestions", track.id],
@@ -59,6 +59,19 @@ function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[
     client_name?: string;
   };
   const list: Cand[] = (suggestions ?? track.candidates ?? []) as Cand[];
+  const candidateIds = new Set(list.slice(0, 3).map((c) => c.order_id));
+
+  const needle = q.trim().toLowerCase();
+  const found = needle
+    ? orders
+        .filter((o) => !candidateIds.has(o.id))
+        .filter((o) =>
+          `#${o.id} ${o.client_name} ${o.items} ${o.store} ${o.store_order_number ?? ""}`
+            .toLowerCase()
+            .includes(needle),
+        )
+        .slice(0, 6)
+    : [];
 
   return (
     <div className="rounded-lg border border-line p-3">
@@ -94,33 +107,45 @@ function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[
         </div>
       )}
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <Combobox
-          value={manual}
-          onChange={setManual}
-          className="w-full min-w-0 flex-1 sm:w-auto sm:max-w-sm"
-          placeholder="— выбрать заказ вручную —"
-          searchPlaceholder="Клиент, магазин, товар…"
-          options={orders.map((o) => ({
-            value: String(o.id),
-            label: `#${o.id} · ${o.client_name} · ${o.items}`,
-            // номер магазина в подписи и в поиске: одинаковые заказы клиента
-            // различимы только по нему
-            sublabel: [
-              o.store,
-              o.store_order_number,
-              fmtDate(o.purchased_on),
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          }))}
-        />
-        <Button disabled={!manual} onClick={() => assign(Number(manual), `#${manual}`)}>
-          Привязать
-        </Button>
-        <Button variant="ghost" onClick={dismiss}>
-          Скрыть
-        </Button>
+      <div className="mt-2.5 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            className="w-full min-w-0 flex-1 sm:w-auto sm:max-w-sm"
+            placeholder={
+              list.length > 0
+                ? "Другой заказ: клиент, магазин, номер…"
+                : "Найти заказ: клиент, магазин, номер…"
+            }
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <Button variant="ghost" className="ml-auto" onClick={dismiss}>
+            Скрыть
+          </Button>
+        </div>
+        {found.map((o) => (
+          <div key={o.id} className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <Link href={`/orders/${o.id}`} className="font-medium hover:text-accent">
+              #{o.id} · {o.client_name} · {o.items}
+            </Link>
+            <span className="truncate text-muted">
+              {[o.store, o.store_order_number, fmtDate(o.purchased_on)]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+            <Button
+              className="ml-auto h-7"
+              onClick={() => assign(o.id, `#${o.id} · ${o.client_name}`)}
+            >
+              Привязать
+            </Button>
+          </div>
+        ))}
+        {needle && found.length === 0 && (
+          <p className="text-[12px] text-muted">
+            Среди активных заказов ничего не нашлось — проверьте номер или создайте заказ.
+          </p>
+        )}
       </div>
     </div>
   );
