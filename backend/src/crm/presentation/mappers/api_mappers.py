@@ -191,6 +191,7 @@ def track_to_out(t: Track) -> TrackOut:
         carrier=t.carrier,
         order_id=t.order_id,
         suborder_id=t.suborder_id,
+        email_log_id=t.email_log_id,
         source=t.source.value,
         match_status=t.match_status.value,
         candidates=(

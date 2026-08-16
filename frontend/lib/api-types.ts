@@ -67,6 +67,7 @@ export interface Track {
   carrier: string | null;
   order_id: number | null;
   suborder_id: number | null;
+  email_log_id: number | null;
   source: "manual" | "email";
   match_status: "linked" | "open" | "dismissed";
   candidates: TrackCandidate[] | null;

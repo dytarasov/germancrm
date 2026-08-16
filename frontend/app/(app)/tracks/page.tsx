@@ -5,8 +5,9 @@ import Link from "next/link";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebounced } from "@/lib/use-debounced";
 import { api } from "@/lib/api";
-import type { OrderListItem, Track, TrackSuggestion } from "@/lib/api-types";
+import type { EmailDetail, OrderListItem, Track, TrackSuggestion } from "@/lib/api-types";
 import { fmtDate, fmtDateTime } from "@/lib/format";
+import { trackingUrl } from "@/lib/tracking";
 import { Badge, Button, Card, EmptyState, Input, Section } from "@/components/ui";
 import { toastError, toastSaved } from "@/components/toasts";
 
@@ -14,11 +15,19 @@ function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[
   const qc = useQueryClient();
   // живой поиск вместо выпадашки: результаты — такие же строки, как кандидаты
   const [q, setQ] = useState("");
+  const [emailOpen, setEmailOpen] = useState(false);
 
   const { data: suggestions } = useQuery({
     queryKey: ["track-suggestions", track.id],
     queryFn: () => api.get<TrackSuggestion[]>(`/api/tracks/${track.id}/suggestions`),
     staleTime: 30_000,
+  });
+  // контекст письма-источника: непривязанных треков единицы, грузим сразу
+  const { data: email } = useQuery({
+    queryKey: ["email", track.email_log_id],
+    queryFn: () => api.get<EmailDetail>(`/api/mail/emails/${track.email_log_id}`),
+    enabled: track.email_log_id !== null,
+    staleTime: 60_000,
   });
 
   const refresh = () => {
@@ -75,14 +84,51 @@ function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[
 
   return (
     <div className="rounded-lg border border-line p-3">
-      <div className="flex items-center gap-2.5">
-        <span className="font-mono text-[13.5px] font-medium">{track.tracking_number}</span>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <a
+          href={trackingUrl(track.tracking_number, track.carrier)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Открыть на сайте перевозчика"
+          className="font-mono text-[13.5px] font-medium hover:text-accent hover:underline"
+        >
+          {track.tracking_number} <span aria-hidden>↗</span>
+        </a>
         {track.carrier && <Badge className="bg-zinc-500/10 text-muted uppercase">{track.carrier}</Badge>}
-        <Badge className="bg-zinc-500/10 text-muted">
-          {track.source === "email" ? "из письма" : "вручную"}
-        </Badge>
+        {track.source !== "email" && (
+          <Badge className="bg-zinc-500/10 text-muted">вручную</Badge>
+        )}
         <span className="ml-auto text-[11.5px] text-muted">{fmtDateTime(track.created_at)}</span>
       </div>
+
+      {/* Откуда трек: письмо-источник — тема, отправитель, разбор LLM */}
+      {email && (
+        <div className="mt-2 rounded-md bg-surface2/60 px-2.5 py-2 text-[12.5px]">
+          <button
+            type="button"
+            onClick={() => setEmailOpen((v) => !v)}
+            className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 text-left"
+            title={emailOpen ? "Свернуть письмо" : "Показать письмо"}
+          >
+            <span className="font-medium">{email.subject ?? "(без темы)"}</span>
+            <span className="text-muted">{email.from_addr}</span>
+            {email.sent_at && (
+              <span className="text-[11.5px] text-muted">{fmtDateTime(email.sent_at)}</span>
+            )}
+            <span className="ml-auto text-[11.5px] text-accent">
+              {emailOpen ? "свернуть" : "письмо ▾"}
+            </span>
+          </button>
+          {email.extracted?.summary && (
+            <p className="mt-0.5 text-muted">LLM: {email.extracted.summary}</p>
+          )}
+          {emailOpen && email.body_text && (
+            <pre className="mt-2 max-h-48 overflow-y-auto rounded bg-surface p-2 font-mono text-[11.5px] leading-relaxed break-words whitespace-pre-wrap text-muted">
+              {email.body_text}
+            </pre>
+          )}
+        </div>
+      )}
 
       {list.length > 0 && (
         <div className="mt-2.5 space-y-1.5">
@@ -269,7 +315,17 @@ export default function TracksPage() {
             <tbody>
               {(all ?? []).map((t) => (
                 <tr key={t.id} className="border-b border-line/60 last:border-0">
-                  <td className="px-3 py-2 font-mono text-[12.5px]">{t.tracking_number}</td>
+                  <td className="px-3 py-2 font-mono text-[12.5px]">
+                    <a
+                      href={trackingUrl(t.tracking_number, t.carrier)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Открыть на сайте перевозчика"
+                      className="hover:text-accent hover:underline"
+                    >
+                      {t.tracking_number}
+                    </a>
+                  </td>
                   <td className="px-3 py-2 text-[12.5px] text-muted uppercase">{t.carrier ?? "—"}</td>
                   <td className="px-3 py-2 text-[12.5px]">
                     {t.order_id ? (

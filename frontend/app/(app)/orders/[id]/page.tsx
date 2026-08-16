@@ -8,6 +8,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Flight, OrderDetail, OrderItem, OrderStatus, Payment, Settings, Suborder, Track } from "@/lib/api-types";
 import { STATUS_LABEL, isTerminal } from "@/lib/status";
 import { fmtDate, fmtDateTime, fmtMoney, isoToday, safeHref } from "@/lib/format";
+import { trackingUrl } from "@/lib/tracking";
 import { Badge, Button, Card, Field, Input, Section, Spinner, cx } from "@/components/ui";
 import { SelectBox } from "@/components/select-box";
 import { Combobox } from "@/components/combobox";
@@ -1024,7 +1025,15 @@ function TracksSection({ order }: { order: OrderDetail }) {
           const sub = subIdx >= 0 ? order.suborders[subIdx] : null;
           return (
             <div key={t.id} className="flex items-center gap-3 text-[13px]">
-              <span className="font-mono">{t.tracking_number}</span>
+              <a
+                href={trackingUrl(t.tracking_number, t.carrier)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Открыть на сайте перевозчика"
+                className="font-mono hover:text-accent hover:underline"
+              >
+                {t.tracking_number}
+              </a>
               {t.carrier && (
                 <Badge className="bg-zinc-500/10 text-muted uppercase">{t.carrier}</Badge>
               )}

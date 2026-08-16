@@ -41,6 +41,7 @@ class TrackOut(BaseModel):
     carrier: str | None
     order_id: int | None
     suborder_id: int | None
+    email_log_id: int | None  # письмо-источник — для контекста в UI
     source: str
     match_status: str
     candidates: list[TrackCandidateOut] | None
