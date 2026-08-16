@@ -6,7 +6,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useDebounced } from "@/lib/use-debounced";
 import { api } from "@/lib/api";
 import type { OrderListItem, Track, TrackSuggestion } from "@/lib/api-types";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, Input, Section } from "@/components/ui";
 import { Combobox } from "@/components/combobox";
 import { toastError, toastSaved } from "@/components/toasts";
@@ -104,7 +104,15 @@ function OpenTrackCard({ track, orders }: { track: Track; orders: OrderListItem[
           options={orders.map((o) => ({
             value: String(o.id),
             label: `#${o.id} · ${o.client_name} · ${o.items}`,
-            sublabel: o.store,
+            // номер магазина в подписи и в поиске: одинаковые заказы клиента
+            // различимы только по нему
+            sublabel: [
+              o.store,
+              o.store_order_number,
+              fmtDate(o.purchased_on),
+            ]
+              .filter(Boolean)
+              .join(" · "),
           }))}
         />
         <Button disabled={!manual} onClick={() => assign(Number(manual), `#${manual}`)}>

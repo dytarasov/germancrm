@@ -22,7 +22,15 @@ def normalize_number(value: str) -> str:
 
 
 def order_label(row: OrderListRow) -> str:
-    return f"Заказ #{row.order.id} · {row.client_name} · {row.order.store}"
+    """Человекочитаемая подпись заказа для подсказок и ленты почты.
+    Номер заказа магазина обязателен в подписи: только по нему можно отличить
+    четыре одинаковых «собки · amazon.com» одного клиента."""
+    label = f"Заказ #{row.order.id} · {row.client_name} · {row.order.store}"
+    if row.order_numbers:
+        label += f" · {row.order_numbers[0]}"
+        if len(row.order_numbers) > 1:
+            label += f" (+{len(row.order_numbers) - 1})"
+    return label
 
 
 @dataclass(frozen=True, slots=True)
