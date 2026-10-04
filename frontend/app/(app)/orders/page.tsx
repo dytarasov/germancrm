@@ -62,6 +62,19 @@ export default function OrdersPage() {
     return [...map.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name, "ru"));
   }, [orders]);
 
+  // Итоги по всем заказам, прошедшим текущие фильтры (список не пагинируется).
+  const totals = useMemo(() => {
+    const num = (v: string | null) => (v === null ? 0 : parseFloat(v));
+    const list = orders ?? [];
+    return {
+      count: list.length,
+      purchase: list.reduce((s, o) => s + num(o.purchase_price_usd), 0),
+      commission: list.reduce((s, o) => s + num(o.commission_usd), 0),
+      due: list.reduce((s, o) => s + num(o.due_usd), 0),
+      noCommission: list.filter((o) => o.commission_usd === null).length,
+    };
+  }, [orders]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -122,6 +135,25 @@ export default function OrdersPage() {
               <table className="w-full min-w-[840px]">
                 <OrdersTableHead showClient />
                 <tbody>
+                  <tr className="border-b border-line bg-surface2/50 text-[13px] font-semibold">
+                    <td className="px-3 py-2" colSpan={3}>
+                      Итого
+                      <span className="ml-2 text-[12px] font-normal text-muted">
+                        {totals.count} зак.
+                        {totals.noCommission > 0 && ` · ${totals.noCommission} без комиссии`}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tnum">
+                      {fmtMoney(totals.purchase)}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tnum">
+                      {fmtMoney(totals.commission)}
+                    </td>
+                    <td />
+                    <td className="px-3 py-2 text-right font-mono tnum">
+                      {fmtMoney(totals.due)}
+                    </td>
+                  </tr>
                   {groups.map(([cid, g]) => {
                     const debt = g.orders.reduce(
                       (s, o) => s + (o.due_usd !== null ? parseFloat(o.due_usd) : 0),
@@ -155,6 +187,21 @@ export default function OrdersPage() {
             </div>
             {/* Карточки (<sm), группировка по клиентам сохраняется */}
             <div className="sm:hidden">
+              {/* нижнюю границу даёт заголовок первой группы (border-y) */}
+              <div className="bg-surface2/50 px-3 py-2 text-[12.5px]">
+                <div className="font-semibold">
+                  Итого
+                  <span className="ml-2 text-[12px] font-normal text-muted">
+                    {totals.count} зак.
+                    {totals.noCommission > 0 && ` · ${totals.noCommission} без комиссии`}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[12px] tnum">
+                  <span>зак. {fmtMoney(totals.purchase)}</span>
+                  <span>ком. {fmtMoney(totals.commission)}</span>
+                  <span className="ml-auto font-semibold">ост. {fmtMoney(totals.due)}</span>
+                </div>
+              </div>
               {groups.map(([cid, g]) => {
                 const debt = g.orders.reduce(
                   (s, o) => s + (o.due_usd !== null ? parseFloat(o.due_usd) : 0),
