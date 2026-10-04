@@ -43,7 +43,7 @@ const ACTION_DOT: Record<string, string> = {
 const EVENT_RU: Record<string, string> = {
   order_confirmation: "подтверждение заказа",
   shipped: "отправлен магазином",
-  arrived_at_warehouse: "поступил на склад США",
+  arrived_at_warehouse: "получено в США",
   delivery_update: "обновление доставки",
   cancellation_or_refund: "отмена / возврат",
   other: "прочее",
@@ -202,7 +202,7 @@ function ResolveForm({
             options={[
               { value: "", label: "Не менять статус" },
               { value: "shipped", label: "Отправлен магазином" },
-              { value: "arrived_at_warehouse", label: "Поступил на склад США" },
+              { value: "arrived_at_warehouse", label: "Получено в США" },
             ]}
           />
           <p className="text-[11.5px] text-muted">

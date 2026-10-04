@@ -250,41 +250,103 @@ class OrderService:
             raise DomainValidationError("Для отмены и возврата используйте отдельные операции")
         async with self._uow:
             order = await self._get_locked(order_id)
-            if order.status == new_status:
-                pass
-            else:
-                fields: dict[str, Any] = {"status": new_status}
-                if new_status == OrderStatus.CLOSED:
-                    rules.ensure_closable(order.commission_usd)
-                    fields["closed_at"] = _now()
-                if order.status == OrderStatus.CLOSED and new_status != OrderStatus.CLOSED:
-                    fields["closed_at"] = None
-                if order.status == OrderStatus.REFUNDED:
-                    fields["refunded_at"] = None
-                await self._orders.update_fields(order_id, fields)
-                # Ручной статус по линейке каскадится в подзаказы: заказ целиком
-                # «уехал рейсом» и т.п. Отменённые подзаказы не трогаем, кроме
-                # реактивации отменённого заказа целиком.
-                if new_status in rules.ACTIVE_STATUSES:
-                    reactivating = order.status == OrderStatus.CANCELLED
-                    for sub in await self._suborders.list_for_order(order_id):
-                        if sub.status == new_status:
-                            continue
-                        if sub.status == OrderStatus.CANCELLED and not reactivating:
-                            continue
-                        await self._suborders.update(sub.id, {"status": new_status})
-                await self._history.add(
-                    order_id=order_id,
-                    old_status=order.status,
-                    new_status=new_status,
-                    source=StatusSource.MANUAL,
-                    comment=comment,
-                )
-                log.info(
-                    "Заказ #%s: статус %s → %s (вручную)",
-                    order_id, order.status.value, new_status.value,
-                )
+            await self._set_status_locked(order, new_status, comment=comment)
         return await self.get_detail(order_id)
+
+    async def _set_status_locked(
+        self,
+        order: Order,
+        new_status: OrderStatus,
+        *,
+        comment: str | None = None,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> None:
+        """Тело ручной смены статуса; заказ уже заблокирован вызывающим."""
+        fields: dict[str, Any] = dict(extra_fields or {})
+        if order.status == new_status:
+            if fields:
+                await self._orders.update_fields(order.id, fields)
+            return
+        fields["status"] = new_status
+        if new_status == OrderStatus.CLOSED:
+            rules.ensure_closable(order.commission_usd)
+            fields["closed_at"] = _now()
+        if order.status == OrderStatus.CLOSED and new_status != OrderStatus.CLOSED:
+            fields["closed_at"] = None
+        if order.status == OrderStatus.REFUNDED:
+            fields["refunded_at"] = None
+        await self._orders.update_fields(order.id, fields)
+        # Ручной статус по линейке каскадится в подзаказы: заказ целиком
+        # «уехал рейсом» и т.п. Отменённые подзаказы не трогаем, кроме
+        # реактивации отменённого заказа целиком.
+        if new_status in rules.ACTIVE_STATUSES:
+            reactivating = order.status == OrderStatus.CANCELLED
+            for sub in await self._suborders.list_for_order(order.id):
+                if sub.status == new_status:
+                    continue
+                if sub.status == OrderStatus.CANCELLED and not reactivating:
+                    continue
+                await self._suborders.update(sub.id, {"status": new_status})
+        await self._history.add(
+            order_id=order.id,
+            old_status=order.status,
+            new_status=new_status,
+            source=StatusSource.MANUAL,
+            comment=comment,
+        )
+        log.info(
+            "Заказ #%s: статус %s → %s (вручную)",
+            order.id, order.status.value, new_status.value,
+        )
+
+    # ---------- рейсы ----------
+
+    async def assign_flight(
+        self, flight_id: int, *, add: list[int], remove: list[int], comment: str | None = None
+    ) -> None:
+        """Пакетное распределение по рейсу из экрана рейсов.
+
+        add: заказ «Получено в США» → привязан к рейсу и переведён в «Рейс»;
+        уже едущий/доставленный/закрытый — только перепривязывается, статус
+        не меняется (так работает и откат снятия с рейса).
+        remove: отвязка от этого рейса; «Рейс» откатывается в «Получено в США»,
+        более поздние статусы (доставлен/закрыт) не трогаем."""
+        relink_only = (OrderStatus.IN_FLIGHT, OrderStatus.DELIVERED, OrderStatus.CLOSED)
+        # единый порядок блокировок — по id, чтобы параллельные пакеты не дедлочились
+        ids = sorted(set(add) | set(remove))
+        add_set = set(add)
+        async with self._uow:
+            for order_id in ids:
+                order = await self._get_locked(order_id)
+                if order_id in add_set:
+                    if order.status in relink_only:
+                        await self._orders.update_fields(order_id, {"flight_id": flight_id})
+                        continue
+                    if order.status != OrderStatus.AT_WAREHOUSE:
+                        raise DomainValidationError(
+                            f"Заказ #{order_id} нельзя отправить рейсом: "
+                            "он ещё не получен в США или отменён"
+                        )
+                    await self._set_status_locked(
+                        order,
+                        OrderStatus.IN_FLIGHT,
+                        comment=comment,
+                        extra_fields={"flight_id": flight_id},
+                    )
+                elif order.flight_id == flight_id:
+                    if order.status == OrderStatus.IN_FLIGHT:
+                        await self._set_status_locked(
+                            order,
+                            OrderStatus.AT_WAREHOUSE,
+                            comment="снят с рейса",
+                            extra_fields={"flight_id": None},
+                        )
+                    else:
+                        await self._orders.update_fields(order_id, {"flight_id": None})
+        log.info(
+            "Рейс #%s: привязаны %s, сняты %s",
+            flight_id, sorted(add_set), sorted(set(remove) - add_set),
+        )
 
     async def close(self, order_id: int) -> OrderDetail:
         return await self.set_status(order_id, OrderStatus.CLOSED)

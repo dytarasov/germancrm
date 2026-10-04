@@ -1172,7 +1172,7 @@ class MailService:
             EmailEventType.ARRIVED_AT_WAREHOUSE,
         ):
             raise DomainValidationError(
-                "Из письма можно применить только события «отправлен» и «на складе»; "
+                "Из письма можно применить только события «отправлен» и «получено в США»; "
                 "остальное меняется в карточке заказа"
             )
         numbers = [normalize_tracking_number(raw) for raw in tracking_numbers or []]

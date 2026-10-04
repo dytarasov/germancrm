@@ -16,6 +16,7 @@ import { DatePicker, formatDateRu } from "@/components/date-picker";
 import { RouteStepper } from "@/components/route-stepper";
 import { StatusBadge, OverdueBadge } from "@/components/status-badge";
 import { InlineField } from "@/components/inline-field";
+import { markupHint } from "@/components/new-order-modal";
 import { pushToast, toastError, toastSaved } from "@/components/toasts";
 
 export default function OrderPage() {
@@ -318,7 +319,15 @@ export default function OrderPage() {
             label="Цена закупки, $"
             value={order.purchase_price_usd}
             type="money"
+            liveHint={(draft) => markupHint(draft, settings?.markup_pct ?? 25)}
             onSave={(v) => v && saveField("purchase_price_usd", v, order.purchase_price_usd)}
+          />
+          <InlineField
+            label="Полная стоимость, $ (закупка + комиссия)"
+            value={order.finance.revenue_usd}
+            type="money"
+            placeholder="впишите — комиссия посчитается"
+            onSave={saveTotal}
           />
           <div
             className={cx(
@@ -401,12 +410,9 @@ export default function OrderPage() {
         {/* Финансы + действия */}
         <div className="space-y-3">
           <Card className="space-y-2 p-4">
-            <InlineField
-              label="Полная стоимость, $ (закупка + комиссия)"
-              value={order.finance.revenue_usd}
-              type="money"
-              placeholder="нет комиссии — впишите сумму"
-              onSave={saveTotal}
+            <Row
+              k="Полная стоимость"
+              v={order.finance.revenue_usd === null ? "нет комиссии" : fmtMoney(order.finance.revenue_usd)}
             />
             <Row k="Оплачено" v={fmtMoney(order.finance.paid_usd)} />
             <div className="border-t border-line pt-2">
@@ -786,6 +792,12 @@ function SubordersSection({
     qc.invalidateQueries({ queryKey: ["client"] });
   };
   const multi = order.suborders.length > 1;
+  // Справочная автосумма подзаказов (без отменённых) — сверка с ценой закупки.
+  const subAmounts = order.suborders
+    .filter((s) => s.status !== "cancelled" && s.amount_usd !== null)
+    .map((s) => parseFloat(s.amount_usd as string));
+  const subSum = subAmounts.length >= 2 ? subAmounts.reduce((a, b) => a + b, 0) : null;
+  const subDiff = subSum === null ? 0 : subSum - parseFloat(order.purchase_price_usd);
   // Состав подзаказов правится только у живого заказа — то же правило на бэке
   // (у отменённого добавление подзаказа иначе молча воскрешало бы заказ).
   const orderTerminal = isTerminal(order.status);
@@ -867,7 +879,7 @@ function SubordersSection({
                 {s.eta_on && (s.status === "purchased" || s.status === "shipped") && (
                   <span
                     className="text-[11.5px] text-muted"
-                    title="Ожидаемое прибытие на склад США (из писем магазина)"
+                    title="Ожидаемое получение в США (из писем магазина)"
                   >
                     ≈ приедет {fmtDate(s.eta_on)}
                   </span>
@@ -949,6 +961,19 @@ function SubordersSection({
             </div>
           );
         })}
+        {subSum !== null && (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md bg-surface2/60 px-2.5 py-2 text-[12.5px]">
+            <span className="text-muted">Сумма подзаказов</span>
+            <span className="font-mono font-semibold tnum">{fmtMoney(subSum)}</span>
+            {Math.abs(subDiff) < 0.005 ? (
+              <span className="text-green-600 dark:text-green-400">= цене закупки</span>
+            ) : (
+              <span className="text-amber-700 dark:text-amber-400">
+                {subDiff > 0 ? "больше" : "меньше"} цены закупки на {fmtMoney(Math.abs(subDiff))}
+              </span>
+            )}
+          </div>
+        )}
         {!orderTerminal && (
           <form onSubmit={add} className="flex flex-wrap gap-2 pt-1">
             <Input

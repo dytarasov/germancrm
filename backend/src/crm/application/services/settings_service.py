@@ -27,6 +27,7 @@ def extract_domain(text: str) -> str | None:
 # Публичные имена полей API ↔ ключи app_settings
 API_TO_KEY: dict[str, str] = {
     "commission_per_kg_usd": "commission.per_kg_usd",
+    "markup_pct": "commission.markup_pct",
     "llm_model": "llm.model",
     "llm_enabled": "llm.enabled",
     "llm_auto_min_confidence": "llm.auto_min_confidence",
@@ -41,6 +42,8 @@ API_TO_KEY: dict[str, str] = {
 
 DEFAULTS: dict[str, Any] = {
     "commission.per_kg_usd": float(rules.COMMISSION_PER_KG_USD),
+    # наценка для подсказки «цена с комиссией» при вводе закупки — только ориентир
+    "commission.markup_pct": 25.0,
     "llm.model": "anthropic/claude-haiku-4.5",
     "llm.enabled": True,
     "llm.auto_min_confidence": 0.75,

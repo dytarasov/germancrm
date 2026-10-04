@@ -9,6 +9,7 @@ from crm.domain.clock import business_today
 from crm.presentation.auth import require_auth
 from crm.presentation.mappers.api_mappers import flight_detail_to_out, flight_to_out
 from crm.presentation.schemas.flights import (
+    FlightAssign,
     FlightCreate,
     FlightDetailOut,
     FlightOut,
@@ -41,6 +42,14 @@ async def list_flights(svc: FromDishka[FlightService]) -> list[FlightOut]:
 @router.get("/{flight_id}", response_model=FlightDetailOut)
 async def get_flight(flight_id: int, svc: FromDishka[FlightService]) -> FlightDetailOut:
     return flight_detail_to_out(await svc.get_detail(flight_id), business_today())
+
+
+@router.post("/{flight_id}/orders", response_model=FlightDetailOut)
+async def assign_flight_orders(
+    flight_id: int, payload: FlightAssign, svc: FromDishka[FlightService]
+) -> FlightDetailOut:
+    detail = await svc.assign_orders(flight_id, add=payload.add, remove=payload.remove)
+    return flight_detail_to_out(detail, business_today())
 
 
 @router.patch("/{flight_id}", response_model=FlightOut)

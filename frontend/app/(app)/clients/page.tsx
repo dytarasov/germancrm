@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { ClientListItem } from "@/lib/api-types";
-import { fmtMoney, safeHref } from "@/lib/format";
+import { fmtMoney, telegramLink } from "@/lib/format";
 import { useDebounced } from "@/lib/use-debounced";
 import { Button, Card, EmptyState, Field, Input, Modal } from "@/components/ui";
 import { toastError } from "@/components/toasts";
@@ -65,6 +65,24 @@ function NewClientModal({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
       </form>
     </Modal>
+  );
+}
+
+function TelegramCell({ raw }: { raw: string | null }) {
+  if (!raw) return <span className="text-[12.5px] text-muted">—</span>;
+  const tg = telegramLink(raw);
+  if (!tg) return <span className="text-[12.5px] text-muted">{raw}</span>;
+  return (
+    <a
+      href={tg.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      className="text-[12.5px] text-accent hover:underline"
+    >
+      {tg.label}
+    </a>
   );
 }
 
@@ -130,23 +148,7 @@ export default function ClientsPage() {
                 >
                   <td className="px-3 py-2.5 text-[13px] font-medium">{c.name}</td>
                   <td className="px-3 py-2.5">
-                    {c.telegram_url ? (
-                      safeHref(c.telegram_url) ? (
-                        <a
-                          href={c.telegram_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[12.5px] text-accent hover:underline"
-                        >
-                          {c.telegram_url.replace(/^https?:\/\/(t\.me\/)?/, "@").replace(/^@@/, "@")}
-                        </a>
-                      ) : (
-                        <span className="text-[12.5px] text-muted">{c.telegram_url}</span>
-                      )
-                    ) : (
-                      <span className="text-[12.5px] text-muted">—</span>
-                    )}
+                    <TelegramCell raw={c.telegram_url} />
                   </td>
                   <td className="px-3 py-2.5 text-right text-[13px] tnum">{c.active_orders}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[13px] tnum">

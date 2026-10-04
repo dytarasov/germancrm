@@ -7,10 +7,10 @@ import type { OrderListItem } from "@/lib/api-types";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { flowIndex } from "@/lib/status";
 import { NoCommissionBadge, StatusBadge } from "./status-badge";
-import { RouteStepperMini } from "./route-stepper";
+import { RouteStepperQuick, useQuickStatus } from "./route-stepper";
 import { cx } from "./ui";
 
-export type OrderSortKey = "client" | "status" | "commission" | "promised" | "due";
+export type OrderSortKey = "client" | "status" | "price" | "commission" | "promised" | "due";
 export type OrderSort = { key: OrderSortKey; dir: 1 | -1 } | null;
 
 // Позиция статуса для сортировки: пайплайн по порядку, терминальные — в конец.
@@ -23,6 +23,7 @@ function statusRank(o: OrderListItem): number {
 const SORT_VALUE: Record<OrderSortKey, (o: OrderListItem) => string | number | null> = {
   client: (o) => o.client_name,
   status: statusRank,
+  price: (o) => parseFloat(o.purchase_price_usd),
   commission: (o) => (o.commission_usd === null ? null : parseFloat(o.commission_usd)),
   promised: (o) => o.promised_date,
   due: (o) => (o.due_usd === null ? null : parseFloat(o.due_usd)),
@@ -95,6 +96,7 @@ export function OrdersTableHead({
         <th className="px-3 py-2 font-medium">Заказ</th>
         {showClient && <SortableTh label="Клиент" k="client" sort={s} onSort={onSort} />}
         <SortableTh label="Статус" k="status" sort={s} onSort={onSort} />
+        <SortableTh label="Закупка" k="price" sort={s} onSort={onSort} right />
         <SortableTh label="Комиссия" k="commission" sort={s} onSort={onSort} right />
         <SortableTh label="Обещано" k="promised" sort={s} onSort={onSort} right />
         <SortableTh label="Остаток" k="due" sort={s} onSort={onSort} right />
@@ -105,6 +107,7 @@ export function OrdersTableHead({
 
 export function OrderRow({ order, showClient }: { order: OrderListItem; showClient?: boolean }) {
   const router = useRouter();
+  const quick = useQuickStatus();
   const go = () => router.push(`/orders/${order.id}`);
   return (
     <tr
@@ -151,17 +154,20 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
       )}
       <td className="px-3 py-2">
         <div className="flex items-center gap-2.5">
-          <RouteStepperMini status={order.status} />
+          <RouteStepperQuick order={order} onSelect={quick.change} busy={quick.busyId === order.id} />
           <StatusBadge status={order.status} />
           {order.eta_on && (
             <span
               className="text-[11.5px] whitespace-nowrap text-muted"
-              title="Ожидаемое прибытие на склад США (из писем магазина)"
+              title="Ожидаемое получение в США (из писем магазина)"
             >
               ≈ {fmtDate(order.eta_on)}
             </span>
           )}
         </div>
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
+        {fmtMoney(order.purchase_price_usd)}
       </td>
       <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
         {order.commission_usd === null ? <NoCommissionBadge /> : fmtMoney(order.commission_usd)}
@@ -190,6 +196,7 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
 
 /** Карточный вид строки заказа для узких экранов (<sm). */
 export function OrderCard({ order, showClient }: { order: OrderListItem; showClient?: boolean }) {
+  const quick = useQuickStatus();
   return (
     <li>
       <Link href={`/orders/${order.id}`} className="block px-3 py-3 active:bg-surface2/60">
@@ -222,11 +229,15 @@ export function OrderCard({ order, showClient }: { order: OrderListItem; showCli
           {order.tracks_count > 0 && <> · {order.tracks_count} трек.</>}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <RouteStepperMini status={order.status} />
+          {/* тап по сегменту меняет статус, а не открывает заказ */}
+          <RouteStepperQuick order={order} onSelect={quick.change} busy={quick.busyId === order.id} />
           <StatusBadge status={order.status} />
           {order.eta_on && (
             <span className="text-[11.5px] text-muted">≈ {fmtDate(order.eta_on)}</span>
           )}
+          <span className="font-mono text-[12px] text-muted tnum">
+            зак. {fmtMoney(order.purchase_price_usd)}
+          </span>
           {order.commission_usd === null ? (
             <NoCommissionBadge />
           ) : (
@@ -263,7 +274,7 @@ export function OrdersTable({
   return (
     <>
       <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full min-w-[640px]">
+        <table className="w-full min-w-[760px]">
           <OrdersTableHead showClient={showClient} sort={sort} onSort={toggleSort} />
           <tbody>
             {sorted.map((o) => (

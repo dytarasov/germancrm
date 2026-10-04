@@ -137,6 +137,27 @@ export default function SettingsPage() {
             от него считаются ориентир по предполагаемому весу и автокомиссия от фактического
           </span>
         </label>
+        <label className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
+          Наценка
+          <Input
+            className="w-24 font-mono"
+            inputMode="decimal"
+            defaultValue={settings.markup_pct}
+            onBlur={(e) => {
+              const n = parseFloat(e.target.value.replace(",", "."));
+              if (!Number.isFinite(n) || n < 0) {
+                toastError("Наценка — неотрицательное число");
+                e.target.value = String(settings.markup_pct);
+                return;
+              }
+              if (n !== settings.markup_pct) patch.mutate({ markup_pct: n });
+            }}
+          />
+          %
+          <span className="text-[12px] text-muted">
+            подсказка «цена с комиссией» под полем «Цена закупки» — в заказ сама не пишется
+          </span>
+        </label>
       </Section>
 
       <Section title="Gmail">
@@ -270,7 +291,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <div className="mb-1 text-[12px] font-medium text-muted">
-              Домены склада-форвардера (их письма двигают заказ на «Склад США»)
+              Домены склада-форвардера (их письма двигают заказ в «Получено в США»)
             </div>
             <Chips
               values={settings.forwarder_domains}

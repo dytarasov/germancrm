@@ -12,7 +12,7 @@ export const FLOW: OrderStatus[] = [
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   purchased: "Куплен",
   shipped: "Отправлен",
-  at_warehouse: "Склад США",
+  at_warehouse: "Получено в США",
   in_flight: "Рейс",
   delivered: "Доставлен",
   closed: "Закрыт",

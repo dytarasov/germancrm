@@ -20,6 +20,11 @@ class FlightUpdate(BaseModel):
     description: str | None = None
 
 
+class FlightAssign(BaseModel):
+    add: list[int] = Field(default_factory=list, max_length=500)
+    remove: list[int] = Field(default_factory=list, max_length=500)
+
+
 class FlightOut(BaseModel):
     id: int
     departed_on: date

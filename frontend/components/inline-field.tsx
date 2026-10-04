@@ -13,6 +13,7 @@ export function InlineField({
   onSave,
   placeholder,
   hint,
+  liveHint,
   type = "text",
   mono,
   multiline,
@@ -22,6 +23,8 @@ export function InlineField({
   onSave: (v: string | null) => void;
   placeholder?: string;
   hint?: string;
+  /** подсказка от черновика — пересчитывается по мере ввода */
+  liveHint?: (draft: string) => string | undefined;
   type?: "text" | "money" | "number" | "date";
   mono?: boolean;
   multiline?: boolean;
@@ -86,7 +89,10 @@ export function InlineField({
           }}
         />
       )}
-      {hint && <div className="mt-0.5 px-2 text-[11.5px] text-muted">{hint}</div>}
+      {(() => {
+        const h = liveHint ? liveHint(draft) : hint;
+        return h ? <div className="mt-0.5 px-2 text-[11.5px] text-muted">{h}</div> : null;
+      })()}
     </div>
   );
 }

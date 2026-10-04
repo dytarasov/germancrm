@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import type { Dashboard, LoginBan, OrderListItem } from "@/lib/api-types";
@@ -8,6 +9,7 @@ import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { NoCommissionBadge } from "@/components/status-badge";
 import { OrdersTable } from "@/components/orders-table";
+import { NewOrderModal } from "@/components/new-order-modal";
 import { toastError, toastSaved } from "@/components/toasts";
 
 // Срочное сверху: просроченные, затем по ближайшему обещанному сроку, затем свежие.
@@ -155,6 +157,7 @@ function SecurityBanners() {
 }
 
 export default function DashboardPage() {
+  const [newOrder, setNewOrder] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<Dashboard>("/api/dashboard"),
@@ -178,7 +181,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-[17px] font-semibold tracking-tight">Дашборд</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-[17px] font-semibold tracking-tight">Дашборд</h1>
+        <Button variant="primary" onClick={() => setNewOrder(true)}>
+          Новый заказ
+        </Button>
+      </div>
 
       <SecurityBanners />
       <MailBanners d={data} />
@@ -265,6 +273,8 @@ export default function DashboardPage() {
           <OrdersTable orders={inProgress} showClient />
         )}
       </Card>
+
+      <NewOrderModal open={newOrder} onClose={() => setNewOrder(false)} />
     </div>
   );
 }

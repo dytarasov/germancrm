@@ -310,6 +310,7 @@ def settings_view_to_out(view: SettingsView) -> SettingsOut:
     v = view.values
     return SettingsOut(
         commission_per_kg_usd=float(v.get("commission_per_kg_usd") or 50),
+        markup_pct=float(v.get("markup_pct") if v.get("markup_pct") is not None else 25),
         llm_model=v.get("llm_model") or "",
         llm_enabled=bool(v.get("llm_enabled", True)),
         llm_auto_min_confidence=float(v.get("llm_auto_min_confidence") or 0.75),

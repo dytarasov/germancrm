@@ -282,6 +282,8 @@ export interface LoginBan {
 
 export interface Settings {
   commission_per_kg_usd: number;
+  /** наценка для подсказки «цена с комиссией», % */
+  markup_pct: number;
   llm_model: string;
   llm_enabled: boolean;
   llm_auto_min_confidence: number;

@@ -72,3 +72,26 @@ export function safeHref(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+const TG_USERNAME = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
+
+/**
+ * Telegram клиента пишут как попало: https://t.me/nick, t.me/nick, @nick, nick.
+ * Возвращает ссылку и подпись «@nick»; null — если это не похоже на Telegram
+ * (тогда показываем как есть, текстом).
+ */
+export function telegramLink(raw: string | null | undefined): { href: string; label: string } | null {
+  const v = (raw ?? "").trim();
+  if (!v) return null;
+  const m = v.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([^/?#\s]+)/i);
+  if (m) {
+    const href = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+    if (!safeHref(href)) return null;
+    // t.me/+invite и прочие не-юзернеймы показываем ссылкой как есть
+    return { href, label: TG_USERNAME.test(m[1]) ? `@${m[1]}` : v.replace(/^https?:\/\//i, "") };
+  }
+  const nick = v.replace(/^@/, "");
+  if (TG_USERNAME.test(nick)) return { href: `https://t.me/${nick}`, label: `@${nick}` };
+  // произвольная http(s)-ссылка тоже кликабельна
+  return safeHref(v) ? { href: v, label: v.replace(/^https?:\/\//i, "") } : null;
+}
