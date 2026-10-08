@@ -78,3 +78,11 @@ def test_money_math():
     assert rules.revenue_usd(Decimal("100"), Decimal("50")) == Decimal("150")
     assert rules.due_usd(Decimal("100"), None, Decimal("30")) is None
     assert rules.due_usd(Decimal("100"), Decimal("50"), Decimal("30")) == Decimal("120")
+
+
+def test_due_is_zero_for_closed_only():
+    args = (Decimal("100"), Decimal("50"), Decimal("30"))
+    assert rules.due_usd(*args, OrderStatus.CLOSED) == Decimal("0")
+    # переоткрытый заказ снова показывает остаток
+    assert rules.due_usd(*args, OrderStatus.DELIVERED) == Decimal("120")
+    assert rules.due_usd(*args, OrderStatus.CANCELLED) == Decimal("120")

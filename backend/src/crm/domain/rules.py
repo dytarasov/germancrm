@@ -105,9 +105,16 @@ def revenue_usd(purchase_price_usd: Decimal, commission_usd: Decimal | None) -> 
 
 
 def due_usd(
-    purchase_price_usd: Decimal, commission_usd: Decimal | None, paid_usd: Decimal
+    purchase_price_usd: Decimal,
+    commission_usd: Decimal | None,
+    paid_usd: Decimal,
+    status: OrderStatus | None = None,
 ) -> Decimal | None:
     revenue = revenue_usd(purchase_price_usd, commission_usd)
     if revenue is None:
         return None
+    # Закрыт = оплачен: остатка нет, сколько бы платежей ни внесли.
+    # По текущему статусу — переоткрытый заказ снова показывает остаток.
+    if status == OrderStatus.CLOSED:
+        return Decimal("0")
     return revenue - paid_usd

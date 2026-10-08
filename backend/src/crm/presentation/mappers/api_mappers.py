@@ -90,7 +90,7 @@ def order_row_to_out(row: OrderListRow, today: date) -> OrderListItemOut:
         purchased_on=o.purchased_on,
         is_overdue=rules.is_overdue(o.status, o.promised_date, today),
         paid_usd=row.paid_usd,
-        due_usd=rules.due_usd(o.purchase_price_usd, o.commission_usd, row.paid_usd),
+        due_usd=rules.due_usd(o.purchase_price_usd, o.commission_usd, row.paid_usd, o.status),
         tracks_count=row.tracks_count,
         eta_on=row.eta_on,
     )

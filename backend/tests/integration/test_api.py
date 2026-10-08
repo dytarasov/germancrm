@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 
 from crm.domain.clock import business_today
 
@@ -167,6 +168,8 @@ async def test_full_order_lifecycle(authed):
     assert resp.status_code == 200
     assert resp.json()["status"] == "closed"
     assert resp.json()["closed_at"] is not None
+    # закрыт = оплачен: остаток обнуляется, хотя внесено 800 из 1170
+    assert Decimal(resp.json()["finance"]["due_usd"]) == 0
 
     # история: purchased -> ... -> closed, все manual
     resp = await authed.get(f"/api/orders/{order_id}/status-history")

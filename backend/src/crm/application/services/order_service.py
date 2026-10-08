@@ -64,7 +64,9 @@ class OrderDetail:
         return OrderFinance(
             revenue_usd=rules.revenue_usd(o.purchase_price_usd, o.commission_usd),
             paid_usd=self.paid_usd,
-            due_usd=rules.due_usd(o.purchase_price_usd, o.commission_usd, self.paid_usd),
+            due_usd=rules.due_usd(
+                o.purchase_price_usd, o.commission_usd, self.paid_usd, o.status
+            ),
         )
 
 
