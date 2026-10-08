@@ -63,6 +63,8 @@ export function NewOrderModal({
   const [links, setLinks] = useState("");
   const [price, setPrice] = useState("");
   const [total, setTotal] = useState(""); // полная стоимость = закупка + комиссия
+  // закупка подставлена из полной стоимости, а не введена руками
+  const [priceAuto, setPriceAuto] = useState(false);
   const [commission, setCommission] = useState("");
   const [estWeight, setEstWeight] = useState("");
   const [promised, setPromised] = useState("");
@@ -75,6 +77,27 @@ export function NewOrderModal({
       setNewClient(false);
     }
   }, [open, defaultClientId]);
+
+  const markupPct = settings?.markup_pct ?? 25;
+  // Ввод руками (или кнопкой «взять как цену закупки») — дальше закупку не пересчитываем.
+  const changePrice = (v: string) => {
+    setPrice(v);
+    setPriceAuto(false);
+  };
+  // Заполнена только полная стоимость → считаем, что это закупка + наценка из настроек,
+  // и подставляем закупку сами; дальше всё работает как при ручном вводе обоих полей.
+  const changeTotal = (v: string) => {
+    setTotal(v);
+    if (price.trim() !== "" && !priceAuto) return;
+    const t = parseFloat(v.replace(",", "."));
+    if (Number.isFinite(t) && t > 0) {
+      setPrice((t / (1 + markupPct / 100)).toFixed(2));
+      setPriceAuto(true);
+    } else {
+      setPrice("");
+      setPriceAuto(false);
+    }
+  };
 
   // Полная стоимость + закупка → финальная комиссия (ручная комиссия главнее).
   const priceNum = parseFloat(price.replace(",", "."));
@@ -148,7 +171,9 @@ export function NewOrderModal({
     price.trim() &&
     !totalInvalid;
 
-  const priceHint = markupHint(price, settings?.markup_pct ?? 25);
+  const priceHint = priceAuto
+    ? `Закупка посчитана из полной стоимости (наценка ${markupPct}%). Если она другая — впишите свою.`
+    : markupHint(price, markupPct);
   // Справочная автосумма подзаказов — сверить с ценой закупки.
   const subAmounts = subs.map((s) => parseMoney(s.amount)).filter(Number.isFinite);
   const subSum = subAmounts.length >= 2 ? subAmounts.reduce((a, b) => a + b, 0) : null;
@@ -252,7 +277,7 @@ export function NewOrderModal({
                   <button
                     type="button"
                     className="ml-2 text-accent hover:underline"
-                    onClick={() => setPrice(subSum.toFixed(2))}
+                    onClick={() => changePrice(subSum.toFixed(2))}
                   >
                     взять как цену закупки
                   </button>
@@ -281,7 +306,7 @@ export function NewOrderModal({
               inputMode="decimal"
               className="font-mono"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => changePrice(e.target.value)}
             />
           </Field>
           <Field label="Полная стоимость, $">
@@ -290,7 +315,7 @@ export function NewOrderModal({
               inputMode="decimal"
               className="font-mono"
               value={total}
-              onChange={(e) => setTotal(e.target.value)}
+              onChange={(e) => changeTotal(e.target.value)}
             />
           </Field>
           {priceHint && <p className="col-span-2 -mt-1.5 text-[12px] text-accent">{priceHint}</p>}
