@@ -192,6 +192,7 @@ export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const clientId = Number(id);
   const qc = useQueryClient();
+  const router = useRouter();
   const [newOrder, setNewOrder] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -214,6 +215,19 @@ export default function ClientPage() {
   const c = data.client;
   const tg = telegramLink(c.telegram_url);
   const t = totals(data.orders);
+  // Бэкенд удаляет только клиента без заказов (иначе 409) — кнопку при заказах гасим заранее.
+  const hasOrders = data.orders.length > 0;
+  const remove = () => {
+    if (!window.confirm(`Удалить клиента «${c.name}»? Вернуть его будет нельзя.`)) return;
+    api
+      .del(`/api/clients/${clientId}`)
+      .then(() => {
+        toastSaved(undefined, "Клиент удалён");
+        qc.invalidateQueries({ queryKey: ["clients"] });
+        router.push("/clients");
+      })
+      .catch((err) => toastError(err.message));
+  };
   const save = (field: string, v: string | null, old: string | null) =>
     patch.mutate(
       { [field]: v },
@@ -284,6 +298,17 @@ export default function ClientPage() {
           <ClientOrders orders={data.orders} />
         )}
       </Card>
+
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {hasOrders && (
+          <span className="text-[12px] text-muted">
+            У клиента есть заказы — удалить нельзя
+          </span>
+        )}
+        <Button variant="danger" disabled={hasOrders} onClick={remove}>
+          Удалить клиента
+        </Button>
+      </div>
 
       <NewOrderModal
         open={newOrder}
