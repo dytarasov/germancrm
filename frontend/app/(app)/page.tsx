@@ -172,7 +172,9 @@ export default function DashboardPage() {
   if (isLoading || !data)
     return <p className="py-16 text-center text-[13px] text-muted">Загрузка…</p>;
 
-  const inProgress = [...(activeOrders ?? [])].sort(byUrgency);
+  // Сверху 6 последних созданных (новые первыми), остальные — по срочности.
+  const newestFirst = [...(activeOrders ?? [])].sort((a, b) => b.id - a.id);
+  const inProgress = [...newestFirst.slice(0, 6), ...newestFirst.slice(6).sort(byUrgency)];
 
   const noAttention =
     data.attention.no_commission.length === 0 &&
