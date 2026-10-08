@@ -161,11 +161,11 @@ export default function OrdersPage() {
                     );
                     const noCom = g.orders.filter((o) => o.commission_usd === null).length;
                     return [
-                      <tr key={`g${cid}`} className="border-b border-line bg-surface2/70">
-                        <td colSpan={7} className="border-l-2 border-l-accent px-3 py-1.5">
+                      <tr key={`g${cid}`} className="border-b border-line bg-line/60">
+                        <td colSpan={7} className="border-l-2 border-l-accent px-3 py-2">
                           <Link
                             href={`/clients/${cid}`}
-                            className="text-[12.5px] font-semibold text-accent hover:underline"
+                            className="text-[14px] font-semibold text-accent hover:underline"
                           >
                             {g.name}
                           </Link>
@@ -210,10 +210,10 @@ export default function OrdersPage() {
                 const noCom = g.orders.filter((o) => o.commission_usd === null).length;
                 return (
                   <div key={cid}>
-                    <div className="border-y border-line border-l-2 border-l-accent bg-surface2/70 px-3 py-1.5 first:border-t-0">
+                    <div className="border-y border-line border-l-2 border-l-accent bg-line/60 px-3 py-2 first:border-t-0">
                       <Link
                         href={`/clients/${cid}`}
-                        className="text-[12.5px] font-semibold text-accent hover:underline"
+                        className="text-[14px] font-semibold text-accent hover:underline"
                       >
                         {g.name}
                       </Link>
