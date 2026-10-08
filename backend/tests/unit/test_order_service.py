@@ -11,6 +11,7 @@ from crm.domain.exceptions import (
     InvalidStatusTransitionError,
 )
 from tests.unit.fakes import (
+    NOW,
     FakeEmailRepository,
     FakeGmailStateRepository,
     FakeOrderItemRepository,
@@ -282,6 +283,46 @@ class TestDelete:
         track = await tracks.get_by_number("1Z999AA10123456784")
         assert track.order_id is None
         assert str(track.match_status) == "open"  # вернулся в очередь, не «осиротел»
+
+    async def test_delete_cancelled_removes_payments(
+        self, orders, history, items, suborders
+    ):
+        payments = FakePaymentRepository()
+        service = OrderService(
+            orders,
+            items,
+            FakeTrackRepository(),
+            payments,
+            history,
+            FakeSettingsRepository(),
+            suborders,
+            FakeUnitOfWork(),
+        )
+        orders.seed(make_order(id=1, status=OrderStatus.CANCELLED))
+        orders.seed(make_order(id=2))
+        await payments.add(order_id=1, paid_on=NOW.date(), amount_usd=Decimal("50"), comment=None)
+        await payments.add(order_id=2, paid_on=NOW.date(), amount_usd=Decimal("70"), comment=None)
+        await service.delete(1)
+        assert await payments.list_for_order(1) == []
+        assert len(await payments.list_for_order(2)) == 1  # чужие платежи не тронуты
+
+    async def test_delete_active_keeps_payments(self, orders, history, items, suborders):
+        payments = FakePaymentRepository()
+        service = OrderService(
+            orders,
+            items,
+            FakeTrackRepository(),
+            payments,
+            history,
+            FakeSettingsRepository(),
+            suborders,
+            FakeUnitOfWork(),
+        )
+        orders.seed(make_order(id=1))
+        await payments.add(order_id=1, paid_on=NOW.date(), amount_usd=Decimal("50"), comment=None)
+        await service.delete(1)
+        # платежи не трогаем — в настоящей базе такое удаление остановит FK RESTRICT
+        assert len(await payments.list_for_order(1)) == 1
 
     async def test_delete_keeps_dismissed_tracks_dismissed(
         self, orders, history, items, suborders

@@ -138,6 +138,25 @@ export default function OrderPage() {
       .catch((e) => toastError(e.message));
   };
 
+  // Полное удаление — только у отменённого заказа: платежи уходят вместе с ним.
+  const remove = () => {
+    const n = order.payments.length;
+    const paid =
+      n > 0
+        ? ` Вместе с ним удалятся платежи (${n}) на ${fmtMoney(order.finance.paid_usd)}.`
+        : "";
+    if (!window.confirm(`Удалить заказ #${orderId} насовсем?${paid} Вернуть его будет нельзя.`))
+      return;
+    api
+      .del(`/api/orders/${orderId}`)
+      .then(() => {
+        toastSaved(undefined, "Заказ удалён");
+        qc.invalidateQueries();
+        router.push("/orders");
+      })
+      .catch((e) => toastError(e.message));
+  };
+
   const copy = () => {
     api
       .post<OrderDetail>(`/api/orders/${orderId}/copy`, {})
@@ -440,6 +459,11 @@ export default function OrderPage() {
             <Button variant="outline" className="h-11 w-full lg:h-8" onClick={copy}>
               Создать копию
             </Button>
+            {order.status === "cancelled" && (
+              <Button variant="danger" className="h-11 w-full lg:h-8" onClick={remove}>
+                Удалить заказ
+              </Button>
+            )}
             {!isTerminal(order.status) && (
               <>
                 <Button variant="danger" className="h-11 w-full lg:h-8" onClick={cancel}>

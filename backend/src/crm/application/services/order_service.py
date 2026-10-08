@@ -222,8 +222,14 @@ class OrderService:
 
     async def delete(self, order_id: int) -> None:
         async with self._uow:
-            if await self._orders.get(order_id, for_update=True) is None:
+            order = await self._orders.get(order_id, for_update=True)
+            if order is None:
                 raise NotFoundError.entity("Заказ", order_id)
+            # отменённый заказ удаляется целиком, вместе с платежами; у остальных
+            # платежи держат заказ (FK RESTRICT) — живые деньги одним кликом не стираем
+            if order.status == OrderStatus.CANCELLED:
+                for payment in await self._payments.list_for_order(order_id):
+                    await self._payments.delete(payment.id)
             # треки не удаляем, а возвращаем в очередь непривязанных —
             # иначе они «осиротеют» (linked без заказа) и пропадут из вида;
             # dismissed остаются dismissed: это решение человека
