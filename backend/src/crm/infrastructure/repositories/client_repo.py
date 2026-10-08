@@ -12,7 +12,9 @@ from crm.infrastructure.mappers.db_mappers import record_to_client
 from crm.infrastructure.repositories._sql import like_pattern, set_clause
 
 _ACTIVE = [s.value for s in rules.ACTIVE_STATUSES]
-_EXCLUDED_FROM_DEBT = ["cancelled", "refunded"]
+# Закрытый заказ считается оплаченным, отменённый и возвращённый — снятыми с клиента.
+# Условие по текущему статусу: переоткрытый заказ сам возвращается в долг.
+_EXCLUDED_FROM_DEBT = ["closed", "cancelled", "refunded"]
 _UPDATABLE = {"name", "contacts", "telegram_url", "note"}
 
 _LIST_SQL = """

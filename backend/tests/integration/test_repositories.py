@@ -155,6 +155,56 @@ async def test_payments_sum_and_client_stats(pool):
         assert items[0].debt_usd == Decimal("600.00")
 
 
+async def test_debt_skips_closed_and_returns_on_reopen(pool):
+    async with pool.acquire() as conn:
+        clients = PgClientRepository(conn)
+        orders = PgOrderRepository(conn)
+        dash = PgDashboardRepository(conn)
+        reports = PgReportRepository(conn)
+        client, order = await make_client_and_order(conn, commission_usd=Decimal("100.00"))
+        month_start = TODAY.replace(day=1)
+        month_end = (month_start + timedelta(days=40)).replace(day=1)
+
+        async def numbers():
+            return await dash.numbers(month_start=month_start, month_end_excl=month_end)
+
+        assert (await clients.stats(client.id)).debt_usd == Decimal("1100.00")
+        assert (await numbers()).clients_debt_usd == Decimal("1100.00")
+
+        # закрыт = оплачен: из долга уходит, комиссия попадает в прибыль
+        await orders.update_fields(
+            order.id,
+            {"status": OrderStatus.CLOSED, "closed_at": __import__("datetime").datetime.now(
+                __import__("datetime").UTC
+            )},
+        )
+        stats = await clients.stats(client.id)
+        assert (stats.debt_usd, stats.earned_usd) == (Decimal("0"), Decimal("100.00"))
+        assert (await clients.list())[0].debt_usd == Decimal("0")
+        closed = await numbers()
+        assert closed.clients_debt_usd == Decimal("0")
+        assert closed.month_commissions_usd == Decimal("100.00")
+
+        # закрыли по ошибке и вернули статус — всё как до закрытия
+        await orders.update_fields(
+            order.id, {"status": OrderStatus.DELIVERED, "closed_at": None}
+        )
+        stats = await clients.stats(client.id)
+        assert (stats.debt_usd, stats.earned_usd) == (Decimal("1100.00"), Decimal("0"))
+        assert stats.active_orders == 1
+        assert (await clients.list())[0].debt_usd == Decimal("1100.00")
+        reopened = await numbers()
+        assert reopened.clients_debt_usd == Decimal("1100.00")
+        assert reopened.month_commissions_usd == Decimal("0")
+        assert reopened.orders_in_progress == 1
+        assert (await reports.totals(month_start, month_end))[0] == Decimal("0")
+
+        # отменённый в долг не входит
+        await orders.update_fields(order.id, {"status": OrderStatus.CANCELLED})
+        assert (await clients.stats(client.id)).debt_usd == Decimal("0")
+        assert (await numbers()).clients_debt_usd == Decimal("0")
+
+
 async def test_dashboard_and_report_numbers(pool):
     async with pool.acquire() as conn:
         orders = PgOrderRepository(conn)

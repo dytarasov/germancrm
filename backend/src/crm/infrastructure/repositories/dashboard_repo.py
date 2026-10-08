@@ -9,7 +9,9 @@ from crm.domain import rules
 from crm.domain.models import DashboardNumbers
 
 _ACTIVE = [s.value for s in rules.ACTIVE_STATUSES]
-_EXCLUDED_FROM_DEBT = ["cancelled", "refunded"]
+# Закрытый заказ считается оплаченным, отменённый и возвращённый — снятыми с клиента.
+# Условие по текущему статусу: переоткрытый заказ сам возвращается в долг.
+_EXCLUDED_FROM_DEBT = ["closed", "cancelled", "refunded"]
 
 _SQL = """
 SELECT
