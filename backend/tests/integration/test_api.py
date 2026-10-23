@@ -393,6 +393,36 @@ async def test_client_delete_conflict(authed):
     assert resp.json()["error"]["code"] == "entity_in_use"
 
 
+async def test_delete_order_with_payments(authed):
+    """Активный заказ с платежами не удаляется; отменённый — удаляется вместе
+    с платежами, после чего клиента можно удалить."""
+    resp = await authed.post("/api/clients", json={"name": "Удаляемый"})
+    client_id = resp.json()["id"]
+    resp = await authed.post(
+        "/api/orders",
+        json={
+            "client_id": client_id,
+            "store": "eBay",
+            "items": "Часы",
+            "purchase_price_usd": "80.00",
+        },
+    )
+    order_id = resp.json()["id"]
+    resp = await authed.post(f"/api/orders/{order_id}/payments", json={"amount_usd": "50"})
+    assert resp.status_code == 201
+
+    resp = await authed.delete(f"/api/orders/{order_id}")
+    assert resp.status_code == 409  # активный заказ с деньгами одним кликом не стереть
+
+    assert (await authed.post(f"/api/orders/{order_id}/cancel")).status_code == 200
+    resp = await authed.delete(f"/api/orders/{order_id}")
+    assert resp.status_code == 204
+    assert (await authed.get(f"/api/orders/{order_id}")).status_code == 404
+
+    resp = await authed.delete(f"/api/clients/{client_id}")
+    assert resp.status_code == 204
+
+
 async def test_settings_view_and_patch(authed):
     resp = await authed.get("/api/settings")
     assert resp.status_code == 200

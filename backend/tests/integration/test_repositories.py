@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import asyncpg
@@ -274,3 +274,40 @@ async def test_email_log_idempotent_insert(pool):
         assert await emails.list_all(status=EmailProcessingStatus.PROCESSED) == []
         assert len(await emails.list_all(search="amazon")) == 1
         assert await emails.list_all(search="ebay") == []
+
+
+async def test_email_list_to_tidy_and_mark(pool):
+    async with pool.acquire() as conn:
+        emails = PgEmailRepository(conn)
+        now = datetime.now(UTC)
+
+        async def add(mid: str, status, event_type: str, age_days: int = 1) -> int:
+            email_id = await emails.insert_ingested(
+                EmailMessage(
+                    gmail_message_id=mid,
+                    gmail_thread_id=None,
+                    message_id_hdr=None,
+                    from_addr="ship-confirm@amazon.com",
+                    from_domain="amazon.com",
+                    subject="Shipped",
+                    sent_at=now - timedelta(days=age_days),
+                    snippet=None,
+                    body_text=None,
+                ),
+                status,
+            )
+            assert email_id is not None
+            await emails.update(email_id, {"event_type": event_type})
+            return email_id
+
+        ship = await add("t-ship", EmailProcessingStatus.PROCESSED, "shipped")
+        await add("t-cancel", EmailProcessingStatus.PROCESSED, "cancellation_or_refund")
+        await add("t-review", EmailProcessingStatus.MANUAL_REVIEW, "shipped")
+        await add("t-old", EmailProcessingStatus.PROCESSED, "shipped", age_days=45)
+
+        kw = {"since": now - timedelta(days=30), "event_types": ["shipped"], "limit": 10}
+        rows = await emails.list_to_tidy(**kw)
+        assert [r.gmail_message_id for r in rows] == ["t-ship"]
+
+        await emails.mark_tidied([ship], now)
+        assert await emails.list_to_tidy(**kw) == []
