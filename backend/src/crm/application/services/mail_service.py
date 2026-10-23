@@ -16,6 +16,7 @@ from crm.application.interfaces.gmail import (
     GmailAuthError,
     GmailHistoryExpiredError,
     GmailPort,
+    GmailScopeError,
 )
 from crm.application.interfaces.llm import (
     LLMExtractor,
@@ -66,6 +67,17 @@ MAX_BACKFILL_MESSAGES = 1000
 POISON_AFTER_ATTEMPTS = 5
 RETRY_BACKOFF = [timedelta(minutes=5), timedelta(minutes=30), timedelta(hours=2), timedelta(hours=8)]
 LLM_UNAVAILABLE_CIRCUIT = 3
+# Уборка «Входящих»: рутина, уже разнесённая по заказам. Отмены/возвраты и
+# «прочее» (рассылки магазинов) остаются во «Входящих» — их читает человек.
+TIDY_EVENT_TYPES = (
+    EmailEventType.ORDER_CONFIRMATION,
+    EmailEventType.SHIPPED,
+    EmailEventType.DELIVERY_UPDATE,
+    EmailEventType.ARRIVED_AT_WAREHOUSE,
+)
+TIDY_LABEL = "Обработано CRM"
+TIDY_WINDOW_DAYS = 30
+MAX_TIDY_PER_CYCLE = 100
 
 
 def domain_in_list(domain: str, allowed: list[str]) -> bool:
@@ -1317,6 +1329,48 @@ class MailService:
 
     async def consecutive_failures(self) -> int:
         return (await self._gmail_state.get_sync_state()).consecutive_failures
+
+    # ---------------- Уборка «Входящих» ----------------
+
+    async def tidy_inbox(self, now: datetime | None = None) -> int:
+        """Рутинные письма, которые уже автоматически применены к заказам, помечает
+        прочитанными и переносит из «Входящих» в ярлык TIDY_LABEL.
+
+        Берёт письма за последние TIDY_WINDOW_DAYS дней — при включении заодно
+        разбирает накопившиеся. Никогда не ломает почтовый цикл: ошибки — в лог,
+        неубранные письма доберёт следующий цикл."""
+        if self._gmail is None or not await self._setting("mail.tidy_inbox"):
+            return 0
+        done: list[int] = []
+        now = now or _now()
+        try:
+            creds = await self._gmail_state.get_credentials()
+            if creds is None or creds.revoked_at is not None:
+                return 0
+            rows = await self._emails.list_to_tidy(
+                since=now - timedelta(days=TIDY_WINDOW_DAYS),
+                event_types=[str(t) for t in TIDY_EVENT_TYPES],
+                limit=MAX_TIDY_PER_CYCLE,
+            )
+            if not rows:
+                return 0
+            token = await self._access_token()
+            label_id = await self._gmail.ensure_label(token, TIDY_LABEL)
+            for row in rows:
+                # False = письмо уже удалено из ящика: убирать нечего, тоже отмечаем
+                await self._gmail.archive_message(token, row.gmail_message_id, label_id)
+                done.append(row.id)
+        except GmailScopeError:
+            log.warning(
+                "Уборка «Входящих»: у токена нет права менять письма — переподключите "
+                "Gmail в настройках"
+            )
+        except Exception:  # noqa: BLE001 — уборка не должна ронять цикл
+            log.exception("Уборка «Входящих» не удалась")
+        if done:
+            await self._emails.mark_tidied(done, now)
+            log.info("Уборка «Входящих»: %s писем перенесено в «%s»", len(done), TIDY_LABEL)
+        return len(done)
 
     # ---------------- Оффсайт-бэкапы на Google Drive ----------------
 

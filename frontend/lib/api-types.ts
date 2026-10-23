@@ -292,6 +292,8 @@ export interface Settings {
   whitelist_domains: string[];
   forwarder_domains: string[];
   gmail_query: string;
+  /** убирать разобранные рутинные письма из «Входящих» Gmail */
+  tidy_inbox: boolean;
   auto_threshold: number;
   suggest_threshold: number;
   gmail: {

@@ -93,6 +93,30 @@ class PgEmailRepository:
         )
         return [record_to_email_entry(r) for r in rows]
 
+    async def list_to_tidy(
+        self, *, since: datetime, event_types: list[str], limit: int
+    ) -> list[EmailLogEntry]:
+        rows = await self._conn.fetch(
+            """
+            SELECT * FROM email_log
+            WHERE processing_status = 'processed'
+              AND event_type = ANY($2::text[])
+              AND tidied_at IS NULL
+              AND COALESCE(sent_at, ingested_at) >= $1
+            ORDER BY id
+            LIMIT $3
+            """,
+            since,
+            event_types,
+            limit,
+        )
+        return [record_to_email_entry(r) for r in rows]
+
+    async def mark_tidied(self, email_ids: list[int], at: datetime) -> None:
+        await self._conn.execute(
+            "UPDATE email_log SET tidied_at = $2 WHERE id = ANY($1::bigint[])", email_ids, at
+        )
+
     async def update(self, email_id: int, fields: dict[str, Any]) -> None:
         if not fields:
             return

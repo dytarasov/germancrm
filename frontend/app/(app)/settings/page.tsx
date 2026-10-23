@@ -185,6 +185,24 @@ export default function SettingsPage() {
             </Button>
           </div>
         )}
+        <label className="mt-3 flex items-start gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={settings.tidy_inbox}
+            onChange={(e) => patch.mutate({ tidy_inbox: e.target.checked })}
+          />
+          <span>
+            Наводить порядок во «Входящих»
+            <span className="mt-0.5 block text-[12px] text-muted">
+              Подтверждения заказов, отправки, статусы доставки и поступления на склад, которые
+              уже разнесены по заказам, помечаются прочитанными и переносятся в ярлык «Обработано
+              CRM» (в том числе за последние 30 дней). Отмены, возвраты, рассылки и письма не из
+              белого списка остаются во «Входящих». Нужно разрешение на изменение почты: после
+              включения нажмите «Переподключить».
+            </span>
+          </span>
+        </label>
       </Section>
 
       <Section title="LLM (OpenRouter)">

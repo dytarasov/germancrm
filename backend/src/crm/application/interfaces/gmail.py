@@ -10,6 +10,10 @@ class GmailAuthError(Exception):
     """invalid_grant / 401: refresh token отозван, нужна повторная авторизация."""
 
 
+class GmailScopeError(Exception):
+    """У токена нет права менять письма (gmail.modify) — нужно переподключить Gmail."""
+
+
 class GmailHistoryExpiredError(Exception):
     """historyId протух (HTTP 404 на history.list) — нужен ресинк через messages.list."""
 
@@ -71,4 +75,13 @@ class GmailPort(Protocol):
 
     async def get_message(self, access_token: str, message_id: str) -> EmailMessage | None:
         """None, если письмо уже удалено из ящика (404) — пропускаем, не ломая цикл."""
+        ...
+
+    async def ensure_label(self, access_token: str, name: str) -> str:
+        """id ярлыка с таким именем; создаёт его, если ещё нет."""
+        ...
+
+    async def archive_message(self, access_token: str, message_id: str, label_id: str) -> bool:
+        """Убрать письмо из «Входящих», пометить прочитанным и повесить ярлык.
+        False, если письмо уже удалено из ящика (404)."""
         ...

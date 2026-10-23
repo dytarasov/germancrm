@@ -8,6 +8,7 @@ import pytest
 
 from crm.application.interfaces.gmail import (
     GmailProfile,
+    GmailScopeError,
     HistoryPage,
     HistoryRecord,
     MessagesPage,
@@ -39,6 +40,8 @@ class FakeGmail:
         self.records = records or []
         self.messages = messages or {}
         self.mailbox_history_id = mailbox_history_id
+        self.archived: list[str] = []
+        self.scope_error = False
 
     def build_auth_url(self, state: str) -> str:
         return "https://accounts.google.com/auth"
@@ -64,6 +67,15 @@ class FakeGmail:
 
     async def get_message(self, token, message_id) -> EmailMessage | None:
         return self.messages.get(message_id)
+
+    async def ensure_label(self, token, name) -> str:
+        return "Label_1"
+
+    async def archive_message(self, token, message_id, label_id) -> bool:
+        if self.scope_error:
+            raise GmailScopeError("insufficient scope")
+        self.archived.append(message_id)
+        return True
 
 
 def make_msg(mid: str, domain: str = "amazon.com") -> EmailMessage:
@@ -93,12 +105,19 @@ def state() -> FakeGmailStateRepository:
     return st
 
 
-def build_service(gmail: FakeGmail, state: FakeGmailStateRepository, emails: FakeEmailRepository):
+def build_service(
+    gmail: FakeGmail,
+    state: FakeGmailStateRepository,
+    emails: FakeEmailRepository,
+    settings: dict | None = None,
+):
     return MailService(
         gmail=gmail,
         gmail_state=state,
         emails=emails,
-        settings=FakeSettingsRepository({"mail.whitelist_domains": ["amazon.com"]}),
+        settings=FakeSettingsRepository(
+            {"mail.whitelist_domains": ["amazon.com"], **(settings or {})}
+        ),
         orders=FakeOrderRepository(),
         tracks=FakeTrackRepository(),
         suborders=FakeSuborderRepository(),
@@ -174,3 +193,68 @@ async def test_initial_sync_prefilters_by_whitelist(state):
     assert statuses["a"] == EmailProcessingStatus.NEW
     assert statuses["b"] == EmailProcessingStatus.FILTERED
     assert state.sync_state.history_id == 999
+
+
+# ---------- уборка «Входящих» ----------
+
+PROCESSED = EmailProcessingStatus.PROCESSED
+
+
+def seed_tidy_candidates(emails: FakeEmailRepository) -> None:
+    emails.seed_entry(gmail_message_id="ship", processing_status=PROCESSED, event_type="shipped")
+    emails.seed_entry(
+        gmail_message_id="confirm", processing_status=PROCESSED, event_type="order_confirmation"
+    )
+    # остаются во «Входящих»: отмена, рассылка, ручной разбор, слишком старое
+    emails.seed_entry(
+        gmail_message_id="cancel",
+        processing_status=PROCESSED,
+        event_type="cancellation_or_refund",
+    )
+    emails.seed_entry(
+        gmail_message_id="promo", processing_status=EmailProcessingStatus.IGNORED, event_type="other"
+    )
+    emails.seed_entry(
+        gmail_message_id="review",
+        processing_status=EmailProcessingStatus.MANUAL_REVIEW,
+        event_type="shipped",
+    )
+    emails.seed_entry(
+        gmail_message_id="old",
+        processing_status=PROCESSED,
+        event_type="delivery_update",
+        sent_at=NOW - timedelta(days=45),
+    )
+
+
+async def test_tidy_disabled_by_default(state):
+    gmail, emails = FakeGmail(), FakeEmailRepository()
+    seed_tidy_candidates(emails)
+    svc = build_service(gmail, state, emails)
+    assert await svc.tidy_inbox(now=NOW) == 0
+    assert gmail.archived == []
+
+
+async def test_tidy_moves_only_routine_processed_emails(state):
+    gmail, emails = FakeGmail(), FakeEmailRepository()
+    seed_tidy_candidates(emails)
+    svc = build_service(gmail, state, emails, {"mail.tidy_inbox": True})
+
+    assert await svc.tidy_inbox(now=NOW) == 2
+    assert sorted(gmail.archived) == ["confirm", "ship"]
+    # повторно те же письма не трогаем
+    assert await svc.tidy_inbox(now=NOW) == 0
+    assert len(gmail.archived) == 2
+
+
+async def test_tidy_without_modify_scope_retries_later(state):
+    gmail, emails = FakeGmail(), FakeEmailRepository()
+    seed_tidy_candidates(emails)
+    gmail.scope_error = True
+    svc = build_service(gmail, state, emails, {"mail.tidy_inbox": True})
+
+    assert await svc.tidy_inbox(now=NOW) == 0  # не падает
+    assert emails.tidied == set()  # и не отмечает — после переподключения уберёт
+
+    gmail.scope_error = False
+    assert await svc.tidy_inbox(now=NOW) == 2

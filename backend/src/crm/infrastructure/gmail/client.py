@@ -18,6 +18,7 @@ from crm.application.interfaces.gmail import (
     GmailAuthError,
     GmailHistoryExpiredError,
     GmailProfile,
+    GmailScopeError,
     HistoryPage,
     HistoryRecord,
     MessagesPage,
@@ -28,9 +29,10 @@ from crm.domain.models import EmailMessage
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
+# gmail.modify — чтение плюс ярлыки/«прочитано» (уборка «Входящих»), без удаления писем;
 # drive.file — для оффсайт-бэкапов: приложение видит на Drive только свои файлы
 SCOPE = (
-    "https://www.googleapis.com/auth/gmail.readonly "
+    "https://www.googleapis.com/auth/gmail.modify "
     "https://www.googleapis.com/auth/drive.file"
 )
 
@@ -178,6 +180,56 @@ class GmailApiClient:
                 return None
             raise
         return parse_gmail_message(data)
+
+    async def ensure_label(self, access_token: str, name: str) -> str:
+        data = await self._send(access_token, "GET", f"{API_BASE}/labels")
+        for label in data.get("labels", []):
+            if label.get("name") == name:
+                return label["id"]
+        created = await self._send(
+            access_token,
+            "POST",
+            f"{API_BASE}/labels",
+            json={
+                "name": name,
+                "labelListVisibility": "labelShow",
+                "messageListVisibility": "show",
+            },
+        )
+        return created["id"]
+
+    async def archive_message(self, access_token: str, message_id: str, label_id: str) -> bool:
+        try:
+            await self._send(
+                access_token,
+                "POST",
+                f"{API_BASE}/messages/{message_id}/modify",
+                json={"addLabelIds": [label_id], "removeLabelIds": ["INBOX", "UNREAD"]},
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return False
+            raise
+        return True
+
+    async def _send(
+        self, access_token: str, method: str, url: str, json: dict | None = None
+    ) -> dict:
+        resp = await self._http.request(
+            method,
+            url,
+            json=json,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=_TIMEOUT,
+        )
+        if resp.status_code == 401:
+            raise GmailAuthError("Gmail API: 401 (токен недействителен)")
+        if resp.status_code == 403 and (
+            "insufficient" in resp.text.lower() or "scope" in resp.text.lower()
+        ):
+            raise GmailScopeError(resp.text[:300])
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
 
     async def _get(self, access_token: str, url: str, params: dict | None = None) -> dict:
         resp = await self._http.get(

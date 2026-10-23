@@ -319,6 +319,7 @@ def settings_view_to_out(view: SettingsView) -> SettingsOut:
         whitelist_domains=list(v.get("whitelist_domains") or []),
         forwarder_domains=list(v.get("forwarder_domains") or []),
         gmail_query=str(v.get("gmail_query") or ""),
+        tidy_inbox=bool(v.get("tidy_inbox", False)),
         auto_threshold=int(v.get("auto_threshold") or 80),
         suggest_threshold=int(v.get("suggest_threshold") or 40),
         gmail=GmailConnectionOut(

@@ -36,6 +36,7 @@ API_TO_KEY: dict[str, str] = {
     "whitelist_domains": "mail.whitelist_domains",
     "forwarder_domains": "mail.forwarder_domains",
     "gmail_query": "mail.gmail_query",
+    "tidy_inbox": "mail.tidy_inbox",
     "auto_threshold": "matching.auto_threshold",
     "suggest_threshold": "matching.suggest_threshold",
 }
@@ -52,6 +53,8 @@ DEFAULTS: dict[str, Any] = {
     "mail.whitelist_domains": [],
     "mail.forwarder_domains": [],
     "mail.gmail_query": "",
+    # убирать разобранные рутинные письма из «Входящих» (нужен scope gmail.modify)
+    "mail.tidy_inbox": False,
     "matching.auto_threshold": 80,
     "matching.suggest_threshold": 40,
 }

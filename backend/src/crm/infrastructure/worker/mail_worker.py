@@ -46,6 +46,8 @@ async def run_mail_worker(
                         inserted = await mail.ingest_cycle()
                         stats = await mail.process_cycle()
                         refreshed = await mail.retro_match()
+                        # сама no-op, если уборка «Входящих» выключена в настройках
+                        await mail.tidy_inbox()
                         # раз в сутки; сам no-op, если уже синхронизировано
                         await mail.drive_backup_sync()
                         if inserted or stats.processed or stats.manual:

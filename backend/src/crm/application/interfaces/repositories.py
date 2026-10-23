@@ -263,6 +263,14 @@ class EmailRepository(Protocol):
 
     async def fetch_queue(self, *, now: datetime, limit: int) -> list[EmailLogEntry]: ...
 
+    async def list_to_tidy(
+        self, *, since: datetime, event_types: list[str], limit: int
+    ) -> list[EmailLogEntry]:
+        """Разобранные рутинные письма, которые ещё не убраны из «Входящих»."""
+        ...
+
+    async def mark_tidied(self, email_ids: list[int], at: datetime) -> None: ...
+
     async def update(self, email_id: int, fields: dict[str, Any]) -> None: ...
 
     async def add_event(

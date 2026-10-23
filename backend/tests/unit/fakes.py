@@ -470,6 +470,7 @@ class FakeEmailRepository:
     def __init__(self) -> None:
         self.storage: dict[int, EmailLogEntry] = {}
         self.events: list[dict[str, Any]] = []
+        self.tidied: set[int] = set()
         self._ids = itertools.count(1)
 
     def seed_entry(self, **overrides: Any) -> EmailLogEntry:
@@ -524,6 +525,19 @@ class FakeEmailRepository:
             in (EmailProcessingStatus.NEW, EmailProcessingStatus.PENDING_LLM)
             and (e.next_attempt_at is None or e.next_attempt_at <= now)
         ][:limit]
+
+    async def list_to_tidy(self, *, since, event_types, limit) -> list[EmailLogEntry]:
+        return [
+            e
+            for e in self.storage.values()
+            if e.processing_status == EmailProcessingStatus.PROCESSED
+            and e.event_type in event_types
+            and e.id not in self.tidied
+            and (e.sent_at or e.ingested_at) >= since
+        ][:limit]
+
+    async def mark_tidied(self, email_ids: list[int], at) -> None:
+        self.tidied.update(email_ids)
 
     async def update(self, email_id: int, fields: dict[str, Any]) -> None:
         entry = self.storage[email_id]

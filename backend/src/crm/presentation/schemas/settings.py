@@ -20,6 +20,7 @@ class SettingsOut(BaseModel):
     whitelist_domains: list[str]
     forwarder_domains: list[str]
     gmail_query: str
+    tidy_inbox: bool
     auto_threshold: int
     suggest_threshold: int
     gmail: GmailConnectionOut
@@ -36,6 +37,7 @@ class SettingsPatch(BaseModel):
     whitelist_domains: list[str] | None = None
     forwarder_domains: list[str] | None = None
     gmail_query: str | None = None
+    tidy_inbox: bool | None = None
     auto_threshold: int | None = Field(default=None, ge=1, le=1000)
     suggest_threshold: int | None = Field(default=None, ge=0, le=1000)
 
