@@ -311,3 +311,6 @@ async def test_email_list_to_tidy_and_mark(pool):
 
         await emails.mark_tidied([ship], now)
         assert await emails.list_to_tidy(**kw) == []
+
+        assert await emails.known_gmail_ids(["t-ship", "t-old", "nope"]) == {"t-ship", "t-old"}
+        assert await emails.known_gmail_ids([]) == set()

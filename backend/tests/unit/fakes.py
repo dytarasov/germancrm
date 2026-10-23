@@ -514,6 +514,10 @@ class FakeEmailRepository:
         )
         return entry.id
 
+    async def known_gmail_ids(self, gmail_ids: list[str]) -> set[str]:
+        stored = {e.gmail_message_id for e in self.storage.values()}
+        return {g for g in gmail_ids if g in stored}
+
     async def get(self, email_id: int, *, for_update: bool = False) -> EmailLogEntry | None:
         return self.storage.get(email_id)
 

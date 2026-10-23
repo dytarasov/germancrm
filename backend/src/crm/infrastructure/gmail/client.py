@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from datetime import UTC, datetime
 from email.utils import parseaddr
 from urllib.parse import urlencode
@@ -25,6 +26,8 @@ from crm.application.interfaces.gmail import (
     OAuthTokens,
 )
 from crm.domain.models import EmailMessage
+
+log = logging.getLogger("crm.mail.gmail")
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -242,6 +245,9 @@ class GmailApiClient:
             raise GmailAuthError("Gmail API: 401 (токен недействителен)")
         if resp.status_code == 404 and "/history" in url:
             raise GmailHistoryExpiredError()
+        if resp.status_code in (403, 429):
+            # причина (лимит запросов, нет прав…) только в теле — без него 403 не разобрать
+            log.warning("Gmail API %s на %s: %s", resp.status_code, url, resp.text[:500])
         resp.raise_for_status()
         return resp.json()
 

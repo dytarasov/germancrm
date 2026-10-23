@@ -353,7 +353,12 @@ class MailService:
         self, token: str, message_ids: list[str], whitelist: list[str]
     ) -> int:
         inserted = 0
+        # Уже скачанные письма заново не тянем: если цикл оборвётся посреди
+        # большого бэкфилла (лимит Gmail API), следующий продолжит, а не начнёт сначала.
+        known = await self._emails.known_gmail_ids(message_ids)
         for message_id in message_ids:
+            if message_id in known:
+                continue
             msg = await self._gmail.get_message(token, message_id)
             if msg is None:
                 # письмо удалили до скачивания — пропускаем

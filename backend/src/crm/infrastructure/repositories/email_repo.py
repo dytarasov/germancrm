@@ -70,6 +70,15 @@ class PgEmailRepository:
             str(status),
         )
 
+    async def known_gmail_ids(self, gmail_ids: list[str]) -> set[str]:
+        if not gmail_ids:
+            return set()
+        rows = await self._conn.fetch(
+            "SELECT gmail_message_id FROM email_log WHERE gmail_message_id = ANY($1::text[])",
+            gmail_ids,
+        )
+        return {r["gmail_message_id"] for r in rows}
+
     async def get(self, email_id: int, *, for_update: bool = False) -> EmailLogEntry | None:
         # for_update: row-lock письма на время транзакции — сериализует гонку
         # «ручной разбор ↔ воркер» за одно и то же письмо (кто первый, тот и разбирает).

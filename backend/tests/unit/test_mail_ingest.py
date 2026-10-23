@@ -41,6 +41,8 @@ class FakeGmail:
         self.messages = messages or {}
         self.mailbox_history_id = mailbox_history_id
         self.archived: list[str] = []
+        self.fetched: list[str] = []
+        self.fail_on: set[str] = set()
         self.scope_error = False
 
     def build_auth_url(self, state: str) -> str:
@@ -66,6 +68,9 @@ class FakeGmail:
         return MessagesPage(message_ids=list(self.messages.keys()), next_page_token=None)
 
     async def get_message(self, token, message_id) -> EmailMessage | None:
+        if message_id in self.fail_on:
+            raise RuntimeError("Gmail API 403")
+        self.fetched.append(message_id)
         return self.messages.get(message_id)
 
     async def ensure_label(self, token, name) -> str:
@@ -178,6 +183,24 @@ async def test_deleted_message_does_not_block_cycle(state):
     assert await svc.ingest_cycle() == 1
     assert state.sync_state.history_id == 999
     assert state.sync_state.last_success_at is not None
+
+
+async def test_interrupted_backfill_resumes_without_refetching(state):
+    """Бэкфилл оборвался на середине (403/лимит Gmail): следующий цикл не качает
+    заново уже сохранённые письма, а продолжает с места обрыва."""
+    gmail = FakeGmail(messages={m: make_msg(m) for m in ("a", "b", "c")})
+    gmail.fail_on = {"c"}
+    emails = FakeEmailRepository()
+    svc = build_service(gmail, state, emails)  # history_id = None -> initial sync
+
+    with pytest.raises(RuntimeError):
+        await svc.ingest_cycle()
+    assert gmail.fetched == ["a", "b"]
+
+    gmail.fail_on = set()
+    assert await svc.ingest_cycle() == 1
+    assert gmail.fetched == ["a", "b", "c"]  # a и b второй раз не скачивались
+    assert state.sync_state.history_id == 999
 
 
 async def test_initial_sync_prefilters_by_whitelist(state):
