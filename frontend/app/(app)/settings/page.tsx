@@ -133,7 +133,7 @@ export default function SettingsPage() {
             }}
           />
           $/кг
-          <span className="text-[12px] text-muted">
+          <span className="basis-full text-[12px] text-muted sm:basis-auto">
             от него считаются ориентир по предполагаемому весу и автокомиссия от фактического
           </span>
         </label>
@@ -154,7 +154,7 @@ export default function SettingsPage() {
             }}
           />
           %
-          <span className="text-[12px] text-muted">
+          <span className="basis-full text-[12px] text-muted sm:basis-auto">
             подсказка «цена с комиссией» под полем «Цена закупки» — в заказ сама не пишется
           </span>
         </label>

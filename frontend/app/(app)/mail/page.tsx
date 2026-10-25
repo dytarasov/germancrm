@@ -95,9 +95,12 @@ function HealthBanner({ health }: { health: MailHealth }) {
       </Card>
     );
   return (
-    <Card className="flex flex-wrap items-center gap-2 p-3.5 text-[13px] text-muted">
-      <span className="inline-block size-1.5 rounded-full bg-green-500" />
-      Почта читается · {health.gmail_email} · последняя проверка {fmtDateTime(health.last_success_at)}
+    <Card className="flex flex-wrap items-start gap-2 p-3.5 text-[13px] text-muted">
+      <span className="mt-1.5 inline-block size-1.5 shrink-0 rounded-full bg-green-500" />
+      <span className="min-w-0 flex-1">
+        Почта читается · {health.gmail_email} · последняя проверка{" "}
+        {fmtDateTime(health.last_success_at)}
+      </span>
       {health.llm_degraded && (
         <Badge className="ml-2 bg-amber-500/15 text-amber-700 dark:text-amber-400">
           LLM недоступен — письма копятся

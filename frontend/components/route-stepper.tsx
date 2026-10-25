@@ -161,7 +161,13 @@ export function RouteStepper({
   const terminal = idx === -1;
 
   return (
-    <div className={cx("grid grid-cols-6 gap-1.5", terminal && "pointer-events-none opacity-40")}>
+    // телефон: два ряда по три — в шесть узких колонок подписи рвались посреди слова
+    <div
+      className={cx(
+        "grid grid-cols-3 gap-1.5 sm:grid-cols-6",
+        terminal && "pointer-events-none opacity-40",
+      )}
+    >
       {FLOW.map((s, i) => {
         const reached = !terminal && i <= idx;
         const current = !terminal && i === idx;
@@ -187,7 +193,7 @@ export function RouteStepper({
             />
             <span
               className={cx(
-                "text-[10px] leading-tight break-words sm:text-[11.5px]",
+                "text-[12px] leading-tight sm:text-[11.5px]",
                 current ? "font-semibold text-ink" : reached ? "text-ink/80" : "text-muted",
               )}
             >
