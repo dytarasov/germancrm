@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import type { ClientListItem } from "@/lib/api-types";
 import { fmtMoney, telegramLink } from "@/lib/format";
 import { useDebounced } from "@/lib/use-debounced";
-import { Button, Card, EmptyState, Field, Input, Modal } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, cx } from "@/components/ui";
 import { toastError } from "@/components/toasts";
 
 function NewClientModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -108,7 +108,7 @@ export default function ClientsPage() {
       </div>
 
       <Input
-        className="max-w-72"
+        className="sm:max-w-72"
         placeholder="Поиск по имени…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -120,7 +120,46 @@ export default function ClientsPage() {
         ) : (clients ?? []).length === 0 ? (
           <EmptyState title="Клиентов пока нет" hint="Клиент появится вместе с первым заказом." />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* телефон: карточки — таблица с четырьмя колонками туда не помещается */}
+          <ul className="divide-y divide-line/60 sm:hidden">
+            {(clients ?? []).map((c) => {
+              const debt = parseFloat(c.debt_usd);
+              return (
+                <li
+                  key={c.id}
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Клиент ${c.name}`}
+                  onClick={() => router.push(`/clients/${c.id}`)}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-3 active:bg-surface2/60"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] font-medium">{c.name}</span>
+                    {c.telegram_url && (
+                      <span className="block truncate">
+                        <TelegramCell raw={c.telegram_url} />
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span
+                      className={cx(
+                        "block text-[14px] tnum",
+                        debt > 0 ? "font-semibold text-amber-700 dark:text-amber-400" : "text-muted",
+                      )}
+                    >
+                      {fmtMoney(c.debt_usd)}
+                    </span>
+                    <span className="block text-[12px] text-muted tnum">
+                      {c.active_orders > 0 ? `${c.active_orders} в работе` : "нет активных"}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-line text-left text-[11.5px] tracking-wide text-muted uppercase">
@@ -151,7 +190,12 @@ export default function ClientsPage() {
                     <TelegramCell raw={c.telegram_url} />
                   </td>
                   <td className="px-3 py-2.5 text-right text-[13px] tnum">{c.active_orders}</td>
-                  <td className="px-3 py-2.5 text-right text-[13px] tnum">
+                  <td
+                    className={cx(
+                      "px-3 py-2.5 text-right text-[13px] tnum",
+                      parseFloat(c.debt_usd) > 0 && "font-semibold text-amber-700 dark:text-amber-400",
+                    )}
+                  >
                     {fmtMoney(c.debt_usd)}
                   </td>
                 </tr>
@@ -159,6 +203,7 @@ export default function ClientsPage() {
             </tbody>
           </table>
           </div>
+          </>
         )}
       </Card>
 

@@ -273,9 +273,9 @@ export default function TracksPage() {
       <Section
         title="Все треки"
         actions={
-          <form onSubmit={addTrack} className="flex gap-2">
+          <form onSubmit={addTrack} className="flex w-full gap-2 sm:w-auto">
             <Input
-              className="w-56 font-mono"
+              className="min-w-0 flex-1 font-mono sm:w-56 sm:flex-none"
               placeholder="Добавить трек…"
               value={num}
               onChange={(e) => setNum(e.target.value)}
@@ -293,7 +293,7 @@ export default function TracksPage() {
         }
       >
         <Input
-          className="mb-3 max-w-72 font-mono"
+          className="mb-3 font-mono sm:max-w-72"
           placeholder="Поиск по номеру…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -301,7 +301,48 @@ export default function TracksPage() {
         {isLoading ? (
           <p className="py-8 text-center text-[13px] text-muted">Загрузка…</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* телефон: карточки вместо таблицы */}
+          <ul className="-mx-3 divide-y divide-line/60 sm:hidden">
+            {(all ?? []).map((t) => (
+              <li key={t.id} className="flex items-center gap-3 px-3 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <a
+                    href={trackingUrl(t.tracking_number, t.carrier)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block truncate font-mono text-[13.5px] active:text-accent"
+                  >
+                    {t.tracking_number}
+                  </a>
+                  <span className="block text-[12px] text-muted">
+                    <span className="uppercase">{t.carrier ?? "—"}</span> ·{" "}
+                    {t.source === "email" ? "из письма" : "вручную"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[13px]">
+                  {t.order_id ? (
+                    <Link href={`/orders/${t.order_id}`} className="font-medium text-accent">
+                      #{t.order_id}
+                    </Link>
+                  ) : t.match_status === "dismissed" ? (
+                    <span className="text-muted">скрыт</span>
+                  ) : (
+                    <span className="text-amber-600 dark:text-amber-400">непривязан</span>
+                  )}
+                </span>
+                <Button
+                  variant="ghost"
+                  aria-label={`Удалить трек ${t.tracking_number}`}
+                  className="size-9 justify-center px-0 text-muted"
+                  onClick={() => remove(t)}
+                >
+                  ×
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-line text-left text-[11.5px] tracking-wide text-muted uppercase">
@@ -342,7 +383,11 @@ export default function TracksPage() {
                     {t.source === "email" ? "письмо" : "вручную"}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <Button variant="ghost" className="h-7" onClick={() => remove(t)}>
+                    <Button
+                      variant="ghost"
+                      className="h-7 text-muted hover:text-red-600 dark:hover:text-red-400"
+                      onClick={() => remove(t)}
+                    >
                       Удалить
                     </Button>
                   </td>
@@ -351,6 +396,7 @@ export default function TracksPage() {
             </tbody>
           </table>
           </div>
+          </>
         )}
       </Section>
     </div>
