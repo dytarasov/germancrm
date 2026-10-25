@@ -5,9 +5,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import type { Dashboard, LoginBan, OrderListItem } from "@/lib/api-types";
-import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
-import { Button, Card, EmptyState } from "@/components/ui";
-import { NoCommissionBadge } from "@/components/status-badge";
+import { fmtDateTime, fmtMoney, plural } from "@/lib/format";
+import { STATUS_BAR, STATUS_LABEL } from "@/lib/status";
+import { Button, Card, EmptyState, cx } from "@/components/ui";
 import { OrdersTable } from "@/components/orders-table";
 import { NewOrderModal } from "@/components/new-order-modal";
 import { toastError, toastSaved } from "@/components/toasts";
@@ -21,46 +21,100 @@ function byUrgency(a: OrderListItem, b: OrderListItem): number {
   return b.id - a.id;
 }
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+type StageKey = "purchased" | "shipped" | "at_warehouse" | "in_flight" | "delivered";
+type Filter = StageKey | "no_commission" | "overdue" | null;
+
+const STAGES: StageKey[] = ["purchased", "shipped", "at_warehouse", "in_flight", "delivered"];
+
+const FILTER_TITLE: Record<Exclude<Filter, null>, string> = {
+  ...STATUS_LABEL,
+  no_commission: "Без комиссии",
+  overdue: "Опаздывают",
+};
+
+function matchesFilter(o: OrderListItem, f: Filter): boolean {
+  if (f === null) return true;
+  if (f === "no_commission") return o.commission_usd === null;
+  if (f === "overdue") return o.is_overdue;
+  return o.status === f;
+}
+
+/** Этапы маршрута: сколько заказов на каждом и на какую сумму закупки; тап — фильтр. */
+function Pipeline({
+  orders,
+  filter,
+  onFilter,
+}: {
+  orders: OrderListItem[];
+  filter: Filter;
+  onFilter: (f: Filter) => void;
+}) {
   return (
-    <Card className="p-4">
-      <div className="text-[12px] font-medium text-muted">{label}</div>
-      <div className="mt-1 font-mono text-[26px] leading-none font-semibold tracking-tight tnum">
-        {value}
-      </div>
-      {sub && <div className="mt-1.5 text-[11.5px] text-muted">{sub}</div>}
-    </Card>
+    // телефон: этапы листаются пальцем вбок; от sm — сеткой в ряд
+    <div className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
+      {STAGES.map((s) => {
+        const list = orders.filter((o) => o.status === s);
+        const sum = list.reduce((acc, o) => acc + parseFloat(o.purchase_price_usd), 0);
+        const active = filter === s;
+        return (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onFilter(active ? null : s)}
+            className={cx(
+              "w-[7.25rem] shrink-0 snap-start rounded-lg border bg-surface p-3 text-left transition duration-150 ease-out active:scale-[0.97] sm:w-auto",
+              active
+                ? "border-accent ring-3 ring-accent-soft"
+                : "border-line hover:border-muted/40",
+            )}
+          >
+            <span className={cx("block h-1 rounded-full", STATUS_BAR[s])} />
+            <span className="mt-2.5 block text-[22px] leading-none font-semibold tracking-tight tnum">
+              {list.length}
+            </span>
+            <span className="mt-1 block truncate text-[12px] font-medium text-muted">
+              {STATUS_LABEL[s]}
+            </span>
+            <span className="block text-[11.5px] text-muted tnum">{fmtMoney(sum)}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function MiniOrderList({ orders, accent }: { orders: OrderListItem[]; accent: "amber" | "red" }) {
-  if (orders.length === 0)
-    return <p className="px-1 py-3 text-[12.5px] text-muted">Всё в порядке</p>;
+function AlertChip({
+  children,
+  active,
+  onClick,
+  href,
+  tone = "amber",
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+  href?: string;
+  tone?: "amber" | "red" | "green";
+}) {
+  const cls = cx(
+    "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium whitespace-nowrap transition duration-150 ease-out active:scale-[0.97]",
+    tone === "amber" && "bg-amber-500/12 text-amber-700 dark:text-amber-400",
+    tone === "red" && "bg-red-500/10 text-red-700 dark:text-red-400",
+    tone === "green" && "bg-green-500/10 text-green-700 dark:text-green-400",
+    active && "ring-2 ring-current/30",
+  );
+  if (href)
+    return (
+      <Link href={href} className={cls}>
+        {children}
+      </Link>
+    );
+  if (!onClick) return <span className={cls}>{children}</span>;
   return (
-    <ul className="divide-y divide-line/60">
-      {orders.slice(0, 6).map((o) => (
-        <li key={o.id}>
-          <Link
-            href={`/orders/${o.id}`}
-            className="flex items-baseline justify-between gap-3 px-1 py-2 hover:bg-surface2/50"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-[13px] font-medium">{o.items}</span>
-              <span className="block truncate text-[12px] text-muted">
-                {o.client_name} · {o.store}
-              </span>
-            </span>
-            {accent === "amber" ? (
-              <NoCommissionBadge />
-            ) : (
-              <span className="shrink-0 text-[12px] font-semibold text-red-600 dark:text-red-400">
-                {fmtDate(o.promised_date)}
-              </span>
-            )}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <button type="button" aria-pressed={active} onClick={onClick} className={cls}>
+      {children}
+    </button>
   );
 }
 
@@ -158,6 +212,7 @@ function SecurityBanners() {
 
 export default function DashboardPage() {
   const [newOrder, setNewOrder] = useState(false);
+  const [filter, setFilter] = useState<Filter>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<Dashboard>("/api/dashboard"),
@@ -173,106 +228,99 @@ export default function DashboardPage() {
     return <p className="py-16 text-center text-[13px] text-muted">Загрузка…</p>;
 
   // Сверху 6 последних созданных (новые первыми), остальные — по срочности.
-  const newestFirst = [...(activeOrders ?? [])].sort((a, b) => b.id - a.id);
+  const active = activeOrders ?? [];
+  const newestFirst = [...active].sort((a, b) => b.id - a.id);
   const inProgress = [...newestFirst.slice(0, 6), ...newestFirst.slice(6).sort(byUrgency)];
+  const shown = inProgress.filter((o) => matchesFilter(o, filter));
 
-  const noAttention =
-    data.attention.no_commission.length === 0 &&
-    data.attention.overdue.length === 0 &&
-    data.attention.unmatched_tracks.length === 0;
+  const noCom = data.attention.no_commission.length;
+  const overdue = data.attention.overdue.length;
+  const unmatched = data.attention.unmatched_tracks.length;
+  const toggle = (f: Exclude<Filter, null>) => setFilter((cur) => (cur === f ? null : f));
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[17px] font-semibold tracking-tight">Дашборд</h1>
-        <Button variant="primary" onClick={() => setNewOrder(true)}>
-          Новый заказ
-        </Button>
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-[17px] font-semibold tracking-tight">Дашборд</h1>
+          <Button variant="primary" onClick={() => setNewOrder(true)}>
+            Новый заказ
+          </Button>
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-0.5 text-[13px] text-muted">
+          <span>
+            В работе <b className="font-semibold text-ink tnum">{data.orders_in_progress}</b>
+          </span>
+          <span>
+            Долг клиентов{" "}
+            <b className="font-semibold text-amber-700 tnum dark:text-amber-400">
+              {fmtMoney(data.clients_debt_usd)}
+            </b>
+          </span>
+          <span
+            title={`комиссии ${fmtMoney(data.month_commissions_usd)} − рейсы ${fmtMoney(
+              data.month_flights_cost_usd,
+            )}`}
+          >
+            Прибыль за месяц{" "}
+            <b className="font-semibold text-ink tnum">{fmtMoney(data.month_profit_usd)}</b>
+          </span>
+        </div>
       </div>
 
       <SecurityBanners />
       <MailBanners d={data} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label="Заказов в работе" value={String(data.orders_in_progress)} />
-        <StatTile label="Долг клиентов" value={fmtMoney(data.clients_debt_usd)} />
-        <StatTile
-          label="Прибыль за месяц"
-          value={fmtMoney(data.month_profit_usd)}
-          sub={`комиссии ${fmtMoney(data.month_commissions_usd)} − рейсы ${fmtMoney(
-            data.month_flights_cost_usd,
-          )}`}
-        />
-      </div>
+      <Pipeline orders={active} filter={filter} onFilter={setFilter} />
 
-      {noAttention ? (
-        <Card>
-          <EmptyState
-            title="Ничего не требует внимания"
-            hint="Комиссии заполнены, сроки не горят, все треки привязаны."
-          />
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Card className="p-3">
-            <h2 className="flex items-center justify-between px-1 text-[12.5px] font-semibold">
-              Без комиссии
-              <span className="text-muted">{data.attention.no_commission.length}</span>
-            </h2>
-            <MiniOrderList orders={data.attention.no_commission} accent="amber" />
-          </Card>
-          <Card className="p-3">
-            <h2 className="flex items-center justify-between px-1 text-[12.5px] font-semibold">
-              Опаздывают
-              <span className="text-muted">{data.attention.overdue.length}</span>
-            </h2>
-            <MiniOrderList orders={data.attention.overdue} accent="red" />
-          </Card>
-          <Card className="p-3">
-            <h2 className="flex items-center justify-between px-1 text-[12.5px] font-semibold">
-              Непривязанные треки
-              <span className="text-muted">{data.attention.unmatched_tracks.length}</span>
-            </h2>
-            {data.attention.unmatched_tracks.length === 0 ? (
-              <p className="px-1 py-3 text-[12.5px] text-muted">Всё привязано</p>
-            ) : (
-              <ul className="divide-y divide-line/60">
-                {data.attention.unmatched_tracks.slice(0, 6).map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      href="/tracks"
-                      className="flex items-center justify-between gap-2 px-1 py-2 hover:bg-surface2/50"
-                    >
-                      <span className="truncate font-mono text-[12.5px]">{t.tracking_number}</span>
-                      <span className="shrink-0 text-[11.5px] text-muted">
-                        {t.carrier ?? "—"}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-1.5">
+        {noCom > 0 && (
+          <AlertChip active={filter === "no_commission"} onClick={() => toggle("no_commission")}>
+            {noCom} без комиссии
+          </AlertChip>
+        )}
+        {overdue > 0 && (
+          <AlertChip tone="red" active={filter === "overdue"} onClick={() => toggle("overdue")}>
+            {overdue} {plural(overdue, "опаздывает", "опаздывают", "опаздывают")}
+          </AlertChip>
+        )}
+        {unmatched > 0 ? (
+          <AlertChip href="/tracks">
+            {unmatched} {plural(unmatched, "трек", "трека", "треков")} без заказа →
+          </AlertChip>
+        ) : (
+          <AlertChip tone="green">✓ треки привязаны</AlertChip>
+        )}
+        {noCom === 0 && overdue === 0 && <AlertChip tone="green">✓ сроки и комиссии в порядке</AlertChip>}
+      </div>
 
       <Card>
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-          <h2 className="text-[12.5px] font-semibold">
-            Заказы в работе
-            <span className="ml-2 font-normal text-muted">{inProgress.length}</span>
+          <h2 className="text-[13px] font-semibold">
+            {filter ? FILTER_TITLE[filter] : "Заказы в работе"}
+            <span className="ml-2 font-normal text-muted tnum">{shown.length}</span>
           </h2>
-          <Link href="/orders" className="text-[12.5px] font-medium text-accent hover:underline">
-            Все заказы →
-          </Link>
+          {filter ? (
+            <button
+              type="button"
+              onClick={() => setFilter(null)}
+              className="text-[12.5px] font-medium text-accent hover:underline"
+            >
+              Показать все
+            </button>
+          ) : (
+            <Link href="/orders" className="text-[12.5px] font-medium text-accent hover:underline">
+              Все заказы →
+            </Link>
+          )}
         </div>
-        {inProgress.length === 0 ? (
+        {shown.length === 0 ? (
           <EmptyState
-            title="Активных заказов нет"
-            hint="Новый заказ появится здесь в момент покупки."
+            title={filter ? "Здесь пусто" : "Активных заказов нет"}
+            hint={filter ? undefined : "Новый заказ появится здесь в момент покупки."}
           />
         ) : (
-          <OrdersTable orders={inProgress} showClient />
+          <OrdersTable orders={shown} showClient />
         )}
       </Card>
 

@@ -123,7 +123,7 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
       }}
       className="cursor-pointer border-b border-line/60 transition-colors last:border-0 hover:bg-surface2/60"
     >
-      <td className="max-w-70 px-3 py-2">
+      <td className="max-w-64 px-3 py-2">
         <div className="truncate text-[13px] font-medium">{order.items}</div>
         <div className="truncate text-[12px] text-muted">
           {order.store}
@@ -146,7 +146,8 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
           <Link
             href={`/clients/${order.client_id}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-[13px] font-medium text-accent hover:underline"
+            className="block max-w-36 truncate text-[13px] font-medium whitespace-nowrap text-accent hover:underline"
+            title={order.client_name}
           >
             {order.client_name}
           </Link>
@@ -156,33 +157,33 @@ export function OrderRow({ order, showClient }: { order: OrderListItem; showClie
         <div className="flex items-center gap-2.5">
           <RouteStepperQuick order={order} onSelect={quick.change} busy={quick.busyId === order.id} />
           <StatusBadge status={order.status} />
-          {order.eta_on && (
-            <span
-              className="text-[11.5px] whitespace-nowrap text-muted"
-              title="Ожидаемое получение в США (из писем магазина)"
-            >
-              ≈ {fmtDate(order.eta_on)}
-            </span>
-          )}
         </div>
       </td>
-      <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
+      <td className="px-3 py-2 text-right text-[13px] whitespace-nowrap tnum">
         {fmtMoney(order.purchase_price_usd)}
       </td>
-      <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
+      <td className="px-3 py-2 text-right text-[13px] whitespace-nowrap tnum">
         {order.commission_usd === null ? <NoCommissionBadge /> : fmtMoney(order.commission_usd)}
       </td>
       <td
         className={cx(
-          "px-3 py-2 text-right text-[12.5px]",
+          "px-3 py-2 text-right text-[12.5px] whitespace-nowrap",
           order.is_overdue ? "font-semibold text-red-600 dark:text-red-400" : "text-muted",
         )}
       >
         {fmtDate(order.promised_date)}
+        {order.eta_on && (
+          <div
+            className="text-[11.5px] font-normal text-muted"
+            title="Ожидаемое получение в США (из писем магазина)"
+          >
+            в США ≈ {fmtDate(order.eta_on)}
+          </div>
+        )}
       </td>
       <td
         className={cx(
-          "px-3 py-2 text-right font-mono text-[12.5px] tnum",
+          "px-3 py-2 text-right text-[13px] whitespace-nowrap tnum",
           order.due_usd !== null && parseFloat(order.due_usd) > 0
             ? "font-semibold text-amber-700 dark:text-amber-400"
             : "text-muted",
@@ -204,7 +205,7 @@ export function OrderCard({ order, showClient }: { order: OrderListItem; showCli
           <span className="min-w-0 truncate text-[14px] font-medium">{order.items}</span>
           <span
             className={cx(
-              "shrink-0 font-mono text-[13px] tnum",
+              "shrink-0 text-[13.5px] tnum",
               order.due_usd !== null && parseFloat(order.due_usd) > 0
                 ? "font-semibold text-amber-700 dark:text-amber-400"
                 : "text-muted",
@@ -228,31 +229,27 @@ export function OrderCard({ order, showClient }: { order: OrderListItem; showCli
           )}
           {order.tracks_count > 0 && <> · {order.tracks_count} трек.</>}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <div className="mt-2 flex items-center gap-2.5">
           {/* тап по сегменту меняет статус, а не открывает заказ */}
           <RouteStepperQuick order={order} onSelect={quick.change} busy={quick.busyId === order.id} />
           <StatusBadge status={order.status} />
-          {order.eta_on && (
-            <span className="text-[11.5px] text-muted">≈ {fmtDate(order.eta_on)}</span>
-          )}
-          <span className="font-mono text-[12px] text-muted tnum">
-            зак. {fmtMoney(order.purchase_price_usd)}
-          </span>
-          {order.commission_usd === null ? (
-            <NoCommissionBadge />
-          ) : (
-            <span className="font-mono text-[12px] text-muted tnum">
-              ком. {fmtMoney(order.commission_usd)}
-            </span>
-          )}
           <span
             className={cx(
-              "ml-auto text-[12px]",
+              "ml-auto shrink-0 text-[12.5px] whitespace-nowrap",
               order.is_overdue ? "font-semibold text-red-600 dark:text-red-400" : "text-muted",
             )}
           >
             {fmtDate(order.promised_date)}
           </span>
+        </div>
+        <div className="mt-1 truncate text-[12px] text-muted tnum">
+          закупка {fmtMoney(order.purchase_price_usd)}
+          {order.commission_usd === null ? (
+            <span className="font-medium text-amber-700 dark:text-amber-400"> · нет комиссии</span>
+          ) : (
+            <> · комиссия {fmtMoney(order.commission_usd)}</>
+          )}
+          {order.eta_on && <> · в США ≈ {fmtDate(order.eta_on)}</>}
         </div>
       </Link>
     </li>
