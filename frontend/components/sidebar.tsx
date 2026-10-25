@@ -182,7 +182,7 @@ export function MobileNav() {
           <button
             aria-label="Открыть меню"
             onClick={() => setOpen(true)}
-            className="flex size-11 items-center justify-center rounded-md text-muted hover:bg-surface2 hover:text-ink"
+            className="flex size-11 items-center justify-center rounded-md text-muted transition duration-150 ease-out hover:bg-surface2 hover:text-ink active:scale-[0.94] active:bg-surface2"
           >
             <Icon d="M4 6h16M4 12h16M4 18h16" className="size-5" />
           </button>
@@ -192,7 +192,7 @@ export function MobileNav() {
           <button
             aria-label="Поиск"
             onClick={() => window.dispatchEvent(new CustomEvent("open-cmdk"))}
-            className="ml-auto flex size-11 items-center justify-center rounded-md text-muted hover:bg-surface2 hover:text-ink"
+            className="ml-auto flex size-11 items-center justify-center rounded-md text-muted transition duration-150 ease-out hover:bg-surface2 hover:text-ink active:scale-[0.94] active:bg-surface2"
           >
             <Icon d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" className="size-5" />
           </button>
@@ -208,7 +208,7 @@ export function MobileNav() {
               <button
                 aria-label="Закрыть меню"
                 onClick={() => setOpen(false)}
-                className="flex size-11 items-center justify-center rounded-md text-[18px] text-muted hover:bg-surface2 hover:text-ink"
+                className="flex size-11 items-center justify-center rounded-md text-[18px] text-muted transition duration-150 ease-out hover:bg-surface2 hover:text-ink active:scale-[0.94] active:bg-surface2"
               >
                 ×
               </button>

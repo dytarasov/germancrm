@@ -26,7 +26,7 @@ export function Button({
   return (
     <button
       className={cx(
-        "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition duration-150 ease-out active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
         styles[variant],
         className,
       )}
@@ -144,7 +144,7 @@ export function Seg<T extends string>({
           key={o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            "h-6.5 rounded px-2.5 text-[12.5px] font-medium transition-colors",
+            "h-6.5 rounded px-2.5 text-[12.5px] font-medium transition duration-150 ease-out active:scale-[0.96]",
             value === o.value ? "bg-surface2 text-ink" : "text-muted hover:text-ink",
           )}
         >
