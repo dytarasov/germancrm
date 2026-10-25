@@ -309,6 +309,21 @@ class OrderService:
 
     # ---------- рейсы ----------
 
+    async def _status_before_flight(
+        self, order_id: int, allowed: tuple[OrderStatus, ...], flight_comment: str | None
+    ) -> OrderStatus | None:
+        """Куда вернуть заказ при снятии с рейса. В «Рейс» его перевела галка этого
+        рейса (запись истории с его комментарием) — в статус до неё; «Рейс» ставили
+        вручную — None: только отвязываем, статус остаётся. Нет записи — «Получено в США»."""
+        for change in await self._history.list_for_order(order_id):  # новые первыми
+            if change.suborder_id is None and change.new_status == OrderStatus.IN_FLIGHT:
+                if flight_comment is not None and change.comment != flight_comment:
+                    return None
+                if change.old_status in allowed:
+                    return change.old_status
+                break
+        return OrderStatus.AT_WAREHOUSE
+
     async def assign_flight(
         self, flight_id: int, *, add: list[int], remove: list[int], comment: str | None = None
     ) -> None:
@@ -319,8 +334,9 @@ class OrderService:
         разобрал — ставим вручную, минуя промежуточные этапы); уже
         едущий/доставленный/закрытый — только перепривязывается, статус не
         меняется (так работает и откат снятия с рейса).
-        remove: отвязка от этого рейса; «Рейс» откатывается в «Получено в США»,
-        более поздние статусы (доставлен/закрыт) не трогаем."""
+        remove: отвязка от этого рейса; если в «Рейс» заказ перевела галка этого
+        рейса — откат в статус до неё (по истории), если «Рейс» ставили вручную —
+        только отвязка; более поздние статусы (доставлен/закрыт) не трогаем."""
         relink_only = (OrderStatus.IN_FLIGHT, OrderStatus.DELIVERED, OrderStatus.CLOSED)
         promotable = (OrderStatus.PURCHASED, OrderStatus.SHIPPED, OrderStatus.AT_WAREHOUSE)
         # единый порядок блокировок — по id, чтобы параллельные пакеты не дедлочились
@@ -344,10 +360,15 @@ class OrderService:
                         extra_fields={"flight_id": flight_id},
                     )
                 elif order.flight_id == flight_id:
-                    if order.status == OrderStatus.IN_FLIGHT:
+                    back = (
+                        await self._status_before_flight(order_id, promotable, comment)
+                        if order.status == OrderStatus.IN_FLIGHT
+                        else None
+                    )
+                    if back is not None:
                         await self._set_status_locked(
                             order,
-                            OrderStatus.AT_WAREHOUSE,
+                            back,
                             comment="снят с рейса",
                             extra_fields={"flight_id": None},
                         )

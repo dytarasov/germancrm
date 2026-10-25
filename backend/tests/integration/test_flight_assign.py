@@ -85,6 +85,12 @@ async def test_assign_from_purchased_goes_straight_to_flight(authed):
     assert (detail["status"], detail["flight_id"]) == ("in_flight", flight["id"])
     assert detail["history"][0]["old_status"] == "purchased"
 
+    # сняли с рейса (или «Отменить» в тосте) — вернулся в «Куплен», а не в «Получено в США»
+    resp = await authed.post(f"/api/flights/{flight['id']}/orders", json={"remove": [oid]})
+    assert resp.status_code == 200, resp.text
+    detail = (await authed.get(f"/api/orders/{oid}")).json()
+    assert (detail["status"], detail["flight_id"]) == ("purchased", None)
+
 
 async def test_assign_rejects_cancelled_order(authed):
     client_id = (await authed.post("/api/clients", json={"name": "Тестов"})).json()["id"]
@@ -131,3 +137,19 @@ async def test_in_flight_without_flight_is_listed_and_can_be_linked(authed):
     assert resp.status_code == 200, resp.text
     rows = (await authed.get("/api/orders", params={"status": "in_flight"})).json()
     assert [(r["id"], r["flight_id"]) for r in rows] == [(oid, flight["id"])]
+
+
+async def test_unlink_manual_in_flight_keeps_status(authed):
+    """«Рейс» поставили кликом вручную, потом привязали галкой и сняли (или «Отменить»):
+    заказ остаётся в «Рейсе», просто без привязки — откатывать нечего."""
+    client_id = (await authed.post("/api/clients", json={"name": "Тестов"})).json()["id"]
+    oid = await _order_at_warehouse(authed, client_id)
+    await authed.post(f"/api/orders/{oid}/status", json={"status": "in_flight"})
+    flight = (
+        await authed.post("/api/flights", json={"departed_on": "2026-10-20", "cost_usd": "100"})
+    ).json()
+    await authed.post(f"/api/flights/{flight['id']}/orders", json={"add": [oid]})
+    resp = await authed.post(f"/api/flights/{flight['id']}/orders", json={"remove": [oid]})
+    assert resp.status_code == 200, resp.text
+    detail = (await authed.get(f"/api/orders/{oid}")).json()
+    assert (detail["status"], detail["flight_id"]) == ("in_flight", None)
