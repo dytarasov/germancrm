@@ -484,7 +484,7 @@ export default function OrderPage() {
                   <Input
                     autoFocus
                     inputMode="decimal"
-                    className="font-mono"
+                    className="tnum"
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                   />
@@ -492,7 +492,7 @@ export default function OrderPage() {
                 <Field label="Новая комиссия, $ (пусто — не менять)">
                   <Input
                     inputMode="decimal"
-                    className="font-mono"
+                    className="tnum"
                     value={refundCommission}
                     onChange={(e) => setRefundCommission(e.target.value)}
                   />
@@ -560,7 +560,7 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
   return (
     <div className="flex items-baseline justify-between">
       <span className="text-[12.5px] text-muted">{k}</span>
-      <span className={cx("font-mono text-[13px] tnum", strong && "text-[14px] font-semibold")}>
+      <span className={cx("text-[13px] tnum", strong && "text-[14px] font-semibold")}>
         {v}
       </span>
     </div>
@@ -633,7 +633,7 @@ function ItemEditRow({
         onChange={(e) => setUrl(e.target.value)}
       />
       <Input
-        className="w-16 font-mono"
+        className="w-16 tnum"
         inputMode="numeric"
         aria-label="Количество"
         value={qty}
@@ -772,7 +772,7 @@ function ItemsSection({ order }: { order: OrderDetail }) {
             onChange={(e) => setUrl(e.target.value)}
           />
           <Input
-            className="w-16 font-mono"
+            className="w-16 tnum"
             inputMode="numeric"
             aria-label="Количество"
             value={qty}
@@ -933,7 +933,7 @@ function SubordersSection({
                     {s.store_order_number ?? "нет номера"}
                   </span>
                   {s.amount_usd && (
-                    <span className="font-mono text-[12.5px] text-muted tnum">
+                    <span className="text-[12.5px] text-muted tnum">
                       {fmtMoney(s.amount_usd)}
                     </span>
                   )}
@@ -988,7 +988,7 @@ function SubordersSection({
         {subSum !== null && (
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md bg-surface2/60 px-2.5 py-2 text-[12.5px]">
             <span className="text-muted">Сумма подзаказов</span>
-            <span className="font-mono font-semibold tnum">{fmtMoney(subSum)}</span>
+            <span className="font-semibold tnum">{fmtMoney(subSum)}</span>
             {Math.abs(subDiff) < 0.005 ? (
               <span className="text-green-600 dark:text-green-400">= цене закупки</span>
             ) : (
@@ -1007,7 +1007,7 @@ function SubordersSection({
               onChange={(e) => setNum(e.target.value)}
             />
             <Input
-              className="w-28 font-mono"
+              className="w-28 tnum"
               placeholder="сумма $"
               inputMode="decimal"
               value={amount}
@@ -1173,7 +1173,7 @@ function PaymentsSection({ order }: { order: OrderDetail }) {
         {order.payments.map((p) => (
           <div key={p.id} className="flex items-center gap-3 text-[13px]">
             <span className="w-24 text-muted">{fmtDate(p.paid_on)}</span>
-            <span className="font-mono font-medium tnum">{fmtMoney(p.amount_usd)}</span>
+            <span className="font-medium tnum">{fmtMoney(p.amount_usd)}</span>
             {p.comment && <span className="truncate text-muted">{p.comment}</span>}
             <Button variant="ghost" className="ml-auto h-7" onClick={() => remove(p)}>
               Удалить
@@ -1182,7 +1182,7 @@ function PaymentsSection({ order }: { order: OrderDetail }) {
         ))}
         <form onSubmit={add} className="flex flex-wrap gap-2 pt-1">
           <Input
-            className="max-w-28 font-mono"
+            className="max-w-28 tnum"
             placeholder="0.00"
             inputMode="decimal"
             value={amount}

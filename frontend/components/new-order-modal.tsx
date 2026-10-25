@@ -244,7 +244,7 @@ export function NewOrderModal({
                 <Input
                   placeholder="сумма $"
                   inputMode="decimal"
-                  className="min-w-0 flex-1 font-mono sm:w-24 sm:flex-none"
+                  className="min-w-0 flex-1 tnum sm:w-24 sm:flex-none"
                   value={s.amount}
                   onChange={(e) =>
                     setSubs(subs.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
@@ -272,7 +272,7 @@ export function NewOrderModal({
             </Button>
             {subSum !== null && (
               <p className="text-[12px] text-muted">
-                Сумма подзаказов: <span className="font-mono tnum">{fmtMoney(subSum)}</span>
+                Сумма подзаказов: <span className="tnum">{fmtMoney(subSum)}</span>
                 {price.trim() === "" && (
                   <button
                     type="button"
@@ -304,7 +304,7 @@ export function NewOrderModal({
             <Input
               placeholder="0.00"
               inputMode="decimal"
-              className="font-mono"
+              className="tnum"
               value={price}
               onChange={(e) => changePrice(e.target.value)}
             />
@@ -313,7 +313,7 @@ export function NewOrderModal({
             <Input
               placeholder="закупка + комиссия"
               inputMode="decimal"
-              className="font-mono"
+              className="tnum"
               value={total}
               onChange={(e) => changeTotal(e.target.value)}
             />
@@ -323,7 +323,7 @@ export function NewOrderModal({
             <Input
               placeholder={totalCommission ?? "0.00"}
               inputMode="decimal"
-              className="font-mono"
+              className="tnum"
               value={commission}
               onChange={(e) => setCommission(e.target.value)}
             />
@@ -332,7 +332,7 @@ export function NewOrderModal({
             <Input
               placeholder="0.0"
               inputMode="decimal"
-              className="font-mono"
+              className="tnum"
               value={estWeight}
               onChange={(e) => setEstWeight(e.target.value)}
             />

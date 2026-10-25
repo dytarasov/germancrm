@@ -118,7 +118,7 @@ export default function SettingsPage() {
         <label className="flex flex-wrap items-center gap-2 text-[13px]">
           Тариф
           <Input
-            className="w-24 font-mono"
+            className="w-24 tnum"
             inputMode="decimal"
             defaultValue={settings.commission_per_kg_usd}
             onBlur={(e) => {
@@ -140,7 +140,7 @@ export default function SettingsPage() {
         <label className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
           Наценка
           <Input
-            className="w-24 font-mono"
+            className="w-24 tnum"
             inputMode="decimal"
             defaultValue={settings.markup_pct}
             onBlur={(e) => {
@@ -250,7 +250,7 @@ export default function SettingsPage() {
           <label className="flex flex-wrap items-center gap-2 text-[13px]">
             Порог уверенности LLM (0–1)
             <Input
-              className="w-24 font-mono"
+              className="w-24 tnum"
               inputMode="decimal"
               defaultValue={settings.llm_auto_min_confidence}
               onBlur={(e) => {
@@ -281,7 +281,7 @@ export default function SettingsPage() {
             <div>
               <div className="mb-1 text-[12px] font-medium text-muted">Интервал опроса, сек</div>
               <Input
-                className="w-28 font-mono"
+                className="w-28 tnum"
                 inputMode="numeric"
                 value={interval}
                 onChange={(e) => setIntervalSec(e.target.value)}
@@ -325,7 +325,7 @@ export default function SettingsPage() {
           <label className="flex items-center gap-2">
             Автопривязка от
             <Input
-              className="w-20 font-mono"
+              className="w-20 tnum"
               defaultValue={settings.auto_threshold}
               onBlur={(e) => {
                 const n = parseInt(e.target.value, 10);
@@ -342,7 +342,7 @@ export default function SettingsPage() {
           <label className="flex items-center gap-2">
             Подсказки от
             <Input
-              className="w-20 font-mono"
+              className="w-20 tnum"
               defaultValue={settings.suggest_threshold}
               onBlur={(e) => {
                 const n = parseInt(e.target.value, 10);

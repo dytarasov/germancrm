@@ -143,14 +143,14 @@ export default function OrdersPage() {
                         {totals.noCommission > 0 && ` · ${totals.noCommission} без комиссии`}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tnum">
+                    <td className="px-3 py-2 text-right tnum">
                       {fmtMoney(totals.purchase)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tnum">
+                    <td className="px-3 py-2 text-right tnum">
                       {fmtMoney(totals.commission)}
                     </td>
                     <td />
-                    <td className="px-3 py-2 text-right font-mono tnum">
+                    <td className="px-3 py-2 text-right tnum">
                       {fmtMoney(totals.due)}
                     </td>
                   </tr>
@@ -196,7 +196,7 @@ export default function OrdersPage() {
                     {totals.noCommission > 0 && ` · ${totals.noCommission} без комиссии`}
                   </span>
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[12px] tnum">
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12px] tnum">
                   <span>зак. {fmtMoney(totals.purchase)}</span>
                   <span>ком. {fmtMoney(totals.commission)}</span>
                   <span className="ml-auto font-semibold">ост. {fmtMoney(totals.due)}</span>

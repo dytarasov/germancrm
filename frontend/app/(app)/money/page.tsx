@@ -73,13 +73,13 @@ export default function MoneyPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Card className="p-4">
               <div className="text-[12px] text-muted">Комиссии (закрытые заказы)</div>
-              <div className="mt-1 font-mono text-[24px] font-semibold tnum">
+              <div className="mt-1 text-[24px] font-semibold tnum">
                 {fmtMoney(data.commissions_usd)}
               </div>
             </Card>
             <Card className="p-4">
               <div className="text-[12px] text-muted">Расходы на рейсы</div>
-              <div className="mt-1 font-mono text-[24px] font-semibold tnum">
+              <div className="mt-1 text-[24px] font-semibold tnum">
                 −{fmtMoney(data.flights_cost_usd)}
               </div>
             </Card>
@@ -87,7 +87,7 @@ export default function MoneyPage() {
               <div className="text-[12px] text-muted">Прибыль</div>
               <div
                 className={
-                  "mt-1 font-mono text-[24px] font-semibold tnum " +
+                  "mt-1 text-[24px] font-semibold tnum " +
                   (parseFloat(data.profit_usd) >= 0
                     ? "text-green-600 dark:text-green-400"
                     : "text-red-600 dark:text-red-400")
@@ -114,13 +114,13 @@ export default function MoneyPage() {
                   {data.months.map((m) => (
                     <tr key={m.month} className="border-b border-line/60 last:border-0">
                       <td className="px-3 py-2 text-[13px]">{fmtMonth(m.month)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
+                      <td className="px-3 py-2 text-right text-[12.5px] tnum">
                         {fmtMoney(m.commissions_usd)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-[12.5px] tnum">
+                      <td className="px-3 py-2 text-right text-[12.5px] tnum">
                         −{fmtMoney(m.flights_cost_usd)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-[12.5px] font-semibold tnum">
+                      <td className="px-3 py-2 text-right text-[12.5px] font-semibold tnum">
                         {fmtMoney(m.profit_usd)}
                       </td>
                     </tr>
@@ -149,7 +149,7 @@ export default function MoneyPage() {
                             {o.client_name} · {o.store} · {fmtDate(o.closed_at)}
                           </span>
                         </span>
-                        <span className="shrink-0 font-mono text-[12.5px] font-medium tnum">
+                        <span className="shrink-0 text-[12.5px] font-medium tnum">
                           {fmtMoney(o.commission_usd)}
                         </span>
                       </Link>
@@ -171,7 +171,7 @@ export default function MoneyPage() {
                           <span className="block truncate text-[12px] text-muted">{f.description}</span>
                         )}
                       </span>
-                      <span className="shrink-0 font-mono text-[12.5px] tnum">
+                      <span className="shrink-0 text-[12.5px] tnum">
                         −{fmtMoney(f.cost_usd)}
                       </span>
                     </li>

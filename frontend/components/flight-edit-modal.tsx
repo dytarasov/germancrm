@@ -61,7 +61,7 @@ export function EditFlightModal({ flight, onClose }: { flight: Flight | null; on
           </Field>
           <Field label="Стоимость, $">
             <Input
-              className="font-mono"
+              className="tnum"
               placeholder="0.00"
               inputMode="decimal"
               value={cost}

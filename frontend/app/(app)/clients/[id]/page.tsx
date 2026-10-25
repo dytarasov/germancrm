@@ -31,7 +31,7 @@ function DueCell({ o }: { o: OrderListItem }) {
   return (
     <span
       className={cx(
-        "font-mono tnum",
+        "tnum",
         due !== null && due > 0 ? "font-semibold text-amber-700 dark:text-amber-400" : "text-muted",
       )}
     >
@@ -95,13 +95,13 @@ function ClientOrders({ orders }: { orders: OrderListItem[] }) {
                   </div>
                   <div className="truncate text-[12px] text-muted">{o.items}</div>
                 </td>
-                <td className="px-3 py-2 text-right font-mono tnum">
+                <td className="px-3 py-2 text-right tnum">
                   {fmtMoney(o.purchase_price_usd)}
                 </td>
-                <td className="px-3 py-2 text-right font-mono tnum">
+                <td className="px-3 py-2 text-right tnum">
                   {o.commission_usd === null ? <NoCommissionBadge /> : fmtMoney(o.commission_usd)}
                 </td>
-                <td className="px-3 py-2 text-right font-mono tnum">{fmtMoney(o.paid_usd)}</td>
+                <td className="px-3 py-2 text-right tnum">{fmtMoney(o.paid_usd)}</td>
                 <td className="px-3 py-2 text-right">
                   <DueCell o={o} />
                 </td>
@@ -117,9 +117,9 @@ function ClientOrders({ orders }: { orders: OrderListItem[] }) {
                 Итого
                 <span className="ml-2 text-[12px] font-normal text-muted">без отменённых</span>
               </td>
-              <td className="px-3 py-2 text-right font-mono tnum">{fmtMoney(t.purchase)}</td>
-              <td className="px-3 py-2 text-right font-mono tnum">{fmtMoney(t.commission)}</td>
-              <td className="px-3 py-2 text-right font-mono tnum">{fmtMoney(t.paid)}</td>
+              <td className="px-3 py-2 text-right tnum">{fmtMoney(t.purchase)}</td>
+              <td className="px-3 py-2 text-right tnum">{fmtMoney(t.commission)}</td>
+              <td className="px-3 py-2 text-right tnum">{fmtMoney(t.paid)}</td>
               <td colSpan={2} />
             </tr>
           </tfoot>
@@ -145,15 +145,15 @@ function ClientOrders({ orders }: { orders: OrderListItem[] }) {
               </div>
               <div className="truncate text-[12.5px] text-muted">{o.items}</div>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
-                <span className="font-mono tnum">зак. {fmtMoney(o.purchase_price_usd)}</span>
+                <span className="tnum">зак. {fmtMoney(o.purchase_price_usd)}</span>
                 {o.commission_usd === null ? (
                   <NoCommissionBadge />
                 ) : (
-                  <span className="font-mono text-muted tnum">
+                  <span className="text-muted tnum">
                     ком. {fmtMoney(o.commission_usd)}
                   </span>
                 )}
-                <span className="font-mono text-muted tnum">внес. {fmtMoney(o.paid_usd)}</span>
+                <span className="text-muted tnum">внес. {fmtMoney(o.paid_usd)}</span>
                 <span className="ml-auto">
                   <DueCell o={o} />
                 </span>
@@ -181,7 +181,7 @@ function MoneyRow({
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[12.5px] text-muted">{label}</span>
-        <span className={cx("font-mono text-[15px] font-semibold tnum", className)}>{value}</span>
+        <span className={cx("text-[15px] font-semibold tnum", className)}>{value}</span>
       </div>
       {sub && <div className="text-right text-[11.5px] text-muted">{sub}</div>}
     </div>

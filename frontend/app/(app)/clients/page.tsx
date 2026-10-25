@@ -151,7 +151,7 @@ export default function ClientsPage() {
                     <TelegramCell raw={c.telegram_url} />
                   </td>
                   <td className="px-3 py-2.5 text-right text-[13px] tnum">{c.active_orders}</td>
-                  <td className="px-3 py-2.5 text-right font-mono text-[13px] tnum">
+                  <td className="px-3 py-2.5 text-right text-[13px] tnum">
                     {fmtMoney(c.debt_usd)}
                   </td>
                 </tr>

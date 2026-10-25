@@ -57,7 +57,8 @@ export function InlineField({
   const cls = cx(
     "w-full rounded-md border border-transparent bg-transparent px-2 py-2 text-[16px] transition-colors lg:py-1 lg:text-[13px]",
     "hover:border-line focus:border-line focus:bg-surface",
-    (mono || type === "money" || type === "number") && "font-mono tnum",
+    mono && "font-mono",
+    (type === "money" || type === "number") && "tnum",
   );
 
   return (

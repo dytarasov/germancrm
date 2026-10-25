@@ -54,7 +54,7 @@ export default function FlightsPage() {
       <div>
         <div className="mb-1 text-[12px] font-medium text-muted">Стоимость, $</div>
         <Input
-          className="w-32 font-mono"
+          className="w-32 tnum"
           placeholder="0.00"
           inputMode="decimal"
           value={cost}

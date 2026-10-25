@@ -52,10 +52,14 @@ export function Button({
 }
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  // Своя ширина (w-16, w-28…) должна побеждать: с w-full в базе Tailwind брал бы
+  // любую из двух по порядку в CSS, и «узкие» поля растягивались на всю строку.
+  const ownWidth = /(^|\s)w-/.test(className ?? "");
   return (
     <input
       className={cx(
-        "h-10 w-full rounded-md border border-line bg-surface px-2.5 text-[16px] placeholder:text-muted/70 lg:h-8 lg:text-[13px]",
+        "h-10 rounded-md border border-line bg-surface px-2.5 text-[16px] placeholder:text-muted/70 lg:h-8 lg:text-[13px]",
+        !ownWidth && "w-full",
         className,
       )}
       {...props}
