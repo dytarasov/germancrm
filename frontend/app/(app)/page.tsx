@@ -122,9 +122,13 @@ function AlertChip({
   );
 }
 
-function MailBanners({ d }: { d: Dashboard }) {
+type MailAlert = { text: string; href: string; kind: "red" | "amber" };
+
+/** Сигналы почты: красные (CRM не видит письма) — полосой сверху,
+ * жёлтые (ручной разбор, LLM) — плашками в строке задач рядом с «без комиссии». */
+function mailAlerts(d: Dashboard): MailAlert[] {
   const m = d.mail;
-  const banners: { text: string; href: string; kind: "red" | "amber" }[] = [];
+  const banners: MailAlert[] = [];
   if (m.needs_reauth)
     banners.push({ text: "Gmail требует повторной авторизации", href: "/settings", kind: "red" });
   else if (m.configured && m.gmail_connected && !m.worker_ok)
@@ -134,13 +138,18 @@ function MailBanners({ d }: { d: Dashboard }) {
       kind: "red",
     });
   if (m.llm_degraded)
-    banners.push({ text: "LLM недоступен — письма копятся в очереди", href: "/mail", kind: "amber" });
+    banners.push({ text: "LLM недоступен — письма ждут", href: "/mail", kind: "amber" });
   if (m.poison + m.manual_review > 0)
     banners.push({
-      text: `Писем ждёт ручного разбора: ${m.poison + m.manual_review}`,
+      text: `${m.poison + m.manual_review} ${plural(m.poison + m.manual_review, "письмо", "письма", "писем")} на ручной разбор`,
       href: "/mail",
       kind: "amber",
     });
+  return banners;
+}
+
+function MailBanners({ alerts }: { alerts: MailAlert[] }) {
+  const banners = alerts.filter((a) => a.kind === "red");
   if (banners.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -149,10 +158,7 @@ function MailBanners({ d }: { d: Dashboard }) {
           key={i}
           href={b.href}
           className={
-            "block rounded-lg border px-3.5 py-2.5 text-[13px] font-medium " +
-            (b.kind === "red"
-              ? "border-red-500/30 bg-red-500/8 text-red-700 dark:text-red-400"
-              : "border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-400")
+            "block rounded-lg border border-red-500/30 bg-red-500/8 px-3.5 py-2.5 text-[13px] font-medium text-red-700 dark:text-red-400"
           }
         >
           {b.text} →
@@ -240,6 +246,7 @@ export default function DashboardPage() {
   const noCom = data.attention.no_commission.length;
   const overdue = data.attention.overdue.length;
   const unmatched = data.attention.unmatched_tracks.length;
+  const mail = mailAlerts(data);
   const toggle = (f: Exclude<Filter, null>) => setFilter((cur) => (cur === f ? null : f));
 
   return (
@@ -273,11 +280,18 @@ export default function DashboardPage() {
       </div>
 
       <SecurityBanners />
-      <MailBanners d={data} />
+      <MailBanners alerts={mail} />
 
       <Pipeline orders={active} filter={filter} onFilter={setFilter} />
 
       <div className="flex flex-wrap gap-1.5">
+        {mail
+          .filter((a) => a.kind === "amber")
+          .map((a) => (
+            <AlertChip key={a.text} href={a.href}>
+              {a.text} →
+            </AlertChip>
+          ))}
         {noCom > 0 && (
           <AlertChip active={filter === "no_commission"} onClick={() => toggle("no_commission")}>
             {noCom} без комиссии
