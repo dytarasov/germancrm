@@ -32,6 +32,8 @@ export interface OrderListItem {
   tracks_count: number;
   /** ожидаемое прибытие едущих к складу посылок (из писем), ориентир */
   eta_on: string | null;
+  /** рейс, к которому привязан заказ */
+  flight_id: number | null;
 }
 
 export interface StatusChange {
@@ -104,7 +106,6 @@ export interface OrderDetail extends OrderListItem {
   comment: string | null;
   refunded_amount_usd: string | null;
   refunded_at: string | null;
-  flight_id: number | null;
   copied_from: number | null;
   closed_at: string | null;
   created_at: string;

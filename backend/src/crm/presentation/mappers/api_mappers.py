@@ -93,6 +93,7 @@ def order_row_to_out(row: OrderListRow, today: date) -> OrderListItemOut:
         due_usd=rules.due_usd(o.purchase_price_usd, o.commission_usd, row.paid_usd, o.status),
         tracks_count=row.tracks_count,
         eta_on=row.eta_on,
+        flight_id=o.flight_id,
     )
 
 

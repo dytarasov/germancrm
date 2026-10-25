@@ -141,6 +141,8 @@ class OrderListItemOut(BaseModel):
     tracks_count: int
     # ожидаемое прибытие едущих к складу посылок (из писем), ориентир
     eta_on: date | None
+    # рейс, к которому привязан заказ: экран рейса ищет «Рейс» без привязки
+    flight_id: int | None
 
 
 class OrderDetailOut(OrderListItemOut):
@@ -148,7 +150,6 @@ class OrderDetailOut(OrderListItemOut):
     comment: str | None
     refunded_amount_usd: Decimal | None
     refunded_at: datetime | None
-    flight_id: int | None
     copied_from: int | None
     closed_at: datetime | None
     created_at: datetime

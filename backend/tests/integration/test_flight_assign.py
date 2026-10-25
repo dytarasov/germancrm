@@ -87,3 +87,23 @@ async def test_assign_rejects_order_not_at_warehouse(authed):
 async def test_assign_unknown_flight_is_404(authed):
     resp = await authed.post("/api/flights/999/orders", json={"add": [1]})
     assert resp.status_code == 404
+
+
+async def test_in_flight_without_flight_is_listed_and_can_be_linked(authed):
+    """«Рейс» поставили кликом из списка, рейс не выбрали: в списке это видно
+    (flight_id = null), и галка на экране рейса привязывает без смены статуса."""
+    client_id = (await authed.post("/api/clients", json={"name": "Тестов"})).json()["id"]
+    oid = await _order_at_warehouse(authed, client_id)
+    resp = await authed.post(f"/api/orders/{oid}/status", json={"status": "in_flight"})
+    assert resp.status_code == 200, resp.text
+
+    rows = (await authed.get("/api/orders", params={"status": "in_flight"})).json()
+    assert [(r["id"], r["flight_id"]) for r in rows] == [(oid, None)]
+
+    flight = (
+        await authed.post("/api/flights", json={"departed_on": "2026-10-20", "cost_usd": "100"})
+    ).json()
+    resp = await authed.post(f"/api/flights/{flight['id']}/orders", json={"add": [oid]})
+    assert resp.status_code == 200, resp.text
+    rows = (await authed.get("/api/orders", params={"status": "in_flight"})).json()
+    assert [(r["id"], r["flight_id"]) for r in rows] == [(oid, flight["id"])]
