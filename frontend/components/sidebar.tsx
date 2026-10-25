@@ -12,7 +12,7 @@ import {
   subscribeTheme,
   type ThemePref,
 } from "@/lib/theme";
-import { cx } from "./ui";
+import { cx, usePresence } from "./ui";
 
 const NAV = [
   { href: "/", label: "Дашборд", icon: "M3 3h7v7H3zM14 3h7v4h-7zM14 10h7v11h-7zM3 13h7v8H3z" },
@@ -172,6 +172,8 @@ export function Sidebar() {
 export function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const present = usePresence(open, 200);
+  const state = open ? "open" : "closed";
 
   useEffect(() => setOpen(false), [pathname]);
 
@@ -199,10 +201,22 @@ export function MobileNav() {
         </div>
       </header>
 
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden />
-          <nav className="absolute inset-y-0 left-0 flex h-[100dvh] w-72 max-w-[85vw] flex-col border-r border-line bg-surface pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      {present && (
+        <div
+          data-state={state}
+          className="fixed inset-0 z-40 data-[state=closed]:pointer-events-none lg:hidden"
+        >
+          <div
+            data-state={state}
+            className="absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out starting:opacity-0 data-[state=closed]:opacity-0 data-[state=closed]:duration-200"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          {/* выезжает слева и уходит туда же, откуда пришло */}
+          <nav
+            data-state={state}
+            className="absolute inset-y-0 left-0 flex h-[100dvh] w-72 max-w-[85vw] flex-col border-r border-line bg-surface pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl transition-transform duration-300 ease-drawer starting:-translate-x-full data-[state=closed]:-translate-x-full data-[state=closed]:duration-200"
+          >
             <div className="flex h-13 items-center justify-between pr-1 pl-4">
               <Logo />
               <button

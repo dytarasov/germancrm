@@ -1,9 +1,25 @@
 "use client";
 
-import { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useEffect } from "react";
+import { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useEffect, useState } from "react";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
+}
+
+/** Держит элемент в DOM ещё `exitMs` после закрытия — чтобы успела проиграться
+ * анимация ухода. Появление анимируется через `starting:` (@starting-style),
+ * уход — через `data-[state=closed]:` на тех же свойствах. */
+export function usePresence(open: boolean, exitMs = 200): boolean {
+  const [render, setRender] = useState(open);
+  useEffect(() => {
+    if (open) {
+      setRender(true);
+      return;
+    }
+    const t = window.setTimeout(() => setRender(false), exitMs);
+    return () => window.clearTimeout(t);
+  }, [open, exitMs]);
+  return open || render;
 }
 
 /** Базовый вид контрола-триггера (как Input) — для кастомных пикеров/селектов. */
@@ -179,10 +195,17 @@ export function Modal({
     return () => window.removeEventListener("keydown", h);
   }, [open, onClose]);
 
-  if (!open) return null;
+  const present = usePresence(open, 200);
+  if (!present) return null;
+  const state = open ? "open" : "closed";
   return (
     <div
-      className="fixed inset-0 z-40 flex items-stretch justify-center bg-black/30 sm:items-start sm:p-4 sm:pt-[12vh]"
+      data-state={state}
+      className={cx(
+        "fixed inset-0 z-40 flex items-stretch justify-center bg-black/30 sm:items-start sm:p-4 sm:pt-[12vh]",
+        // фон проявляется; при закрытии клики уже не ловим
+        "transition-opacity duration-200 ease-out starting:opacity-0 data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=closed]:duration-150",
+      )}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -190,10 +213,16 @@ export function Modal({
       <div
         role="dialog"
         aria-modal
+        data-state={state}
         className={cx(
           "flex h-full w-full flex-col border-line bg-surface shadow-xl",
           "sm:h-auto sm:max-h-[80vh] sm:rounded-xl sm:border",
           wide ? "sm:max-w-2xl" : "sm:max-w-md",
+          // телефон: выезжает снизу, как системный лист iOS; десктоп: проявляется
+          // из чуть уменьшенного (не из нуля), по центру — модалка ни к чему не привязана
+          "transition duration-300 ease-drawer max-sm:starting:translate-y-full max-sm:data-[state=closed]:translate-y-full",
+          "sm:duration-200 sm:ease-out sm:starting:scale-[0.97] sm:starting:opacity-0 sm:data-[state=closed]:scale-[0.97] sm:data-[state=closed]:opacity-0",
+          "data-[state=closed]:duration-200 sm:data-[state=closed]:duration-150",
         )}
       >
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-line pr-1.5 pl-4 pt-[env(safe-area-inset-top)] sm:h-11 sm:pt-0">
