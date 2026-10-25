@@ -68,7 +68,8 @@ async def test_unassign_delivered_keeps_status_and_undo_relinks(authed):
     assert (detail["status"], detail["flight_id"]) == ("delivered", flight["id"])
 
 
-async def test_assign_rejects_order_not_at_warehouse(authed):
+async def test_assign_from_purchased_goes_straight_to_flight(authed):
+    """Письма о доставке на склад не было — галка переводит «Куплен» сразу в «Рейс»."""
     client_id = (await authed.post("/api/clients", json={"name": "Тестов"})).json()["id"]
     resp = await authed.post(
         "/api/orders",
@@ -79,9 +80,32 @@ async def test_assign_rejects_order_not_at_warehouse(authed):
         await authed.post("/api/flights", json={"departed_on": "2026-10-10", "cost_usd": "0"})
     ).json()
     resp = await authed.post(f"/api/flights/{flight['id']}/orders", json={"add": [oid]})
+    assert resp.status_code == 200, resp.text
+    detail = (await authed.get(f"/api/orders/{oid}")).json()
+    assert (detail["status"], detail["flight_id"]) == ("in_flight", flight["id"])
+    assert detail["history"][0]["old_status"] == "purchased"
+
+
+async def test_assign_rejects_cancelled_order(authed):
+    client_id = (await authed.post("/api/clients", json={"name": "Тестов"})).json()["id"]
+    ok = await _order_at_warehouse(authed, client_id)
+    resp = await authed.post(
+        "/api/orders",
+        json={"client_id": client_id, "store": "eBay", "items": "x", "purchase_price_usd": "1"},
+    )
+    cancelled = resp.json()["id"]
+    assert (await authed.post(f"/api/orders/{cancelled}/cancel")).status_code == 200
+    flight = (
+        await authed.post("/api/flights", json={"departed_on": "2026-10-10", "cost_usd": "0"})
+    ).json()
+    resp = await authed.post(
+        f"/api/flights/{flight['id']}/orders", json={"add": [ok, cancelled]}
+    )
     assert resp.status_code == 422
-    # пакет атомарный: ничего не привязалось
-    assert (await authed.get(f"/api/orders/{oid}")).json()["flight_id"] is None
+    # пакет атомарный: ничего не привязалось и статус не сменился
+    detail = (await authed.get(f"/api/orders/{ok}")).json()
+    assert (detail["status"], detail["flight_id"]) == ("at_warehouse", None)
+    assert (await authed.get(f"/api/orders/{cancelled}")).json()["flight_id"] is None
 
 
 async def test_assign_unknown_flight_is_404(authed):

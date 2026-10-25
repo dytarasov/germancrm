@@ -314,12 +314,15 @@ class OrderService:
     ) -> None:
         """Пакетное распределение по рейсу из экрана рейсов.
 
-        add: заказ «Получено в США» → привязан к рейсу и переведён в «Рейс»;
-        уже едущий/доставленный/закрытый — только перепривязывается, статус
-        не меняется (так работает и откат снятия с рейса).
+        add: заказ из «Куплен» / «Отправлен» / «Получено в США» → привязан к
+        рейсу и переведён в «Рейс» (магазин не прислал письмо или LLM не
+        разобрал — ставим вручную, минуя промежуточные этапы); уже
+        едущий/доставленный/закрытый — только перепривязывается, статус не
+        меняется (так работает и откат снятия с рейса).
         remove: отвязка от этого рейса; «Рейс» откатывается в «Получено в США»,
         более поздние статусы (доставлен/закрыт) не трогаем."""
         relink_only = (OrderStatus.IN_FLIGHT, OrderStatus.DELIVERED, OrderStatus.CLOSED)
+        promotable = (OrderStatus.PURCHASED, OrderStatus.SHIPPED, OrderStatus.AT_WAREHOUSE)
         # единый порядок блокировок — по id, чтобы параллельные пакеты не дедлочились
         ids = sorted(set(add) | set(remove))
         add_set = set(add)
@@ -330,10 +333,9 @@ class OrderService:
                     if order.status in relink_only:
                         await self._orders.update_fields(order_id, {"flight_id": flight_id})
                         continue
-                    if order.status != OrderStatus.AT_WAREHOUSE:
+                    if order.status not in promotable:
                         raise DomainValidationError(
-                            f"Заказ #{order_id} нельзя отправить рейсом: "
-                            "он ещё не получен в США или отменён"
+                            f"Заказ #{order_id} нельзя отправить рейсом: он отменён или возвращён"
                         )
                     await self._set_status_locked(
                         order,
