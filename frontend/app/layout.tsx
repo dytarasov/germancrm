@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import { Providers } from "./providers";
-import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { THEME_COLOR, THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], variable: "--font-inter" });
@@ -16,6 +16,13 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // клавиатура на Android сжимает вьюпорт, как на iOS — нижние кнопки не прячутся под ней
+  interactiveWidget: "resizes-content",
+  // цвет статус-бара = цвет шапки; при ручном выборе темы перебивается в applyTheme
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: THEME_COLOR.light },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLOR.dark },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

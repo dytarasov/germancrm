@@ -41,6 +41,27 @@
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* Мобильная «нативность»: без серой вспышки при тапе, без раздувания шрифта
+   в landscape. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Тап срабатывает сразу (без ожидания double-tap zoom), а долгое нажатие
+   не выделяет подпись кнопки. Контент (текст, суммы) остаётся выделяемым. */
+button,
+a,
+[role="button"],
+[role="link"] {
+  touch-action: manipulation;
+}
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
