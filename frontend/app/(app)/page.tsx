@@ -26,6 +26,9 @@ type Filter = StageKey | "no_commission" | "overdue" | null;
 
 const STAGES: StageKey[] = ["purchased", "shipped", "at_warehouse", "in_flight", "delivered"];
 
+// узкая карточка этапа на телефоне: «Получено в США» обрезалось до «Получено в …»
+const STAGE_SHORT: Partial<Record<StageKey, string>> = { at_warehouse: "В США" };
+
 const FILTER_TITLE: Record<Exclude<Filter, null>, string> = {
   ...STATUS_LABEL,
   no_commission: "Без комиссии",
@@ -61,6 +64,7 @@ function Pipeline({
             key={s}
             type="button"
             aria-pressed={active}
+            title={STATUS_LABEL[s]}
             onClick={() => onFilter(active ? null : s)}
             className={cx(
               "w-[7.25rem] shrink-0 snap-start rounded-lg border bg-surface p-3 text-left transition duration-150 ease-out active:scale-[0.97] sm:w-auto",
@@ -74,7 +78,7 @@ function Pipeline({
               {list.length}
             </span>
             <span className="mt-1 block truncate text-[12px] font-medium text-muted">
-              {STATUS_LABEL[s]}
+              {STAGE_SHORT[s] ?? STATUS_LABEL[s]}
             </span>
             <span className="block text-[11.5px] text-muted tnum">{fmtMoney(sum)}</span>
           </button>
