@@ -287,6 +287,27 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* на телефоне и планшете поиск иначе только мелкой лупой в шапке */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("open-cmdk"))}
+        className="flex h-11 w-full items-center gap-2.5 rounded-lg border border-line bg-surface px-3 text-left text-[15px] text-muted transition duration-150 ease-out active:scale-[0.99] active:bg-surface2 lg:hidden"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-4.5 shrink-0"
+          aria-hidden
+        >
+          <path d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" />
+        </svg>
+        Поиск: клиент, заказ, трек…
+      </button>
+
       <SecurityBanners />
       <MailBanners alerts={mail} />
 
