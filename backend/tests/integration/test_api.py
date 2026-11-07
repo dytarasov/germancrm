@@ -446,3 +446,26 @@ async def test_mail_health_without_setup(authed):
     body = resp.json()
     assert body["gmail_connected"] is False
     assert body["configured"] is False
+
+
+async def test_create_order_with_weight_date_and_comment(authed):
+    resp = await authed.post("/api/clients", json={"name": "С весом"})
+    client_id = resp.json()["id"]
+    resp = await authed.post(
+        "/api/orders",
+        json={
+            "client_id": client_id,
+            "store": "Amazon",
+            "items": "Кроссовки",
+            "purchase_price_usd": "100",
+            "weight_kg": "1.5",
+            "purchased_on": "2026-10-01",
+            "comment": "подарок",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["weight_kg"] == "1.500" or float(body["weight_kg"]) == 1.5
+    assert float(body["commission_usd"]) == 75.0  # 1.5 кг × тариф $50
+    assert body["purchased_on"] == "2026-10-01"
+    assert body["comment"] == "подарок"

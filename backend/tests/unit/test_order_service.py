@@ -253,6 +253,33 @@ class TestCopy:
         assert detail.payments == []
 
 
+class TestCreateWeight:
+    async def test_actual_weight_fills_commission(self, service):
+        detail = await service.create(
+            {
+                "client_id": 1,
+                "store": "Amazon",
+                "items": "Кроссовки",
+                "purchase_price_usd": Decimal("100"),
+                "weight_kg": Decimal("1.5"),
+            }
+        )
+        assert detail.order.commission_usd == Decimal("75.00")  # 1.5 кг × $50
+
+    async def test_manual_commission_beats_weight(self, service):
+        detail = await service.create(
+            {
+                "client_id": 1,
+                "store": "Amazon",
+                "items": "Кроссовки",
+                "purchase_price_usd": Decimal("100"),
+                "weight_kg": Decimal("1.5"),
+                "commission_usd": Decimal("20"),
+            }
+        )
+        assert detail.order.commission_usd == Decimal("20")
+
+
 class TestDelete:
     async def test_delete_releases_tracks_to_open_queue(
         self, orders, history, items, suborders

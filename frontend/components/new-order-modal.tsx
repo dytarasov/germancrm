@@ -67,7 +67,10 @@ export function NewOrderModal({
   const [priceAuto, setPriceAuto] = useState(false);
   const [commission, setCommission] = useState("");
   const [estWeight, setEstWeight] = useState("");
+  const [weight, setWeight] = useState(""); // фактический — комиссия посчитается по тарифу
   const [promised, setPromised] = useState("");
+  const [purchasedOn, setPurchasedOn] = useState(""); // пусто = сегодня (решает бэкенд)
+  const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
 
   // Открыли из карточки клиента — клиент уже выбран.
@@ -152,7 +155,10 @@ export function NewOrderModal({
         purchase_price_usd: price.trim(),
         commission_usd: commission.trim() || totalCommission || undefined,
         est_weight_kg: estWeight.trim().replace(",", ".") || undefined,
+        weight_kg: weight.trim().replace(",", ".") || undefined,
         promised_date: promised || null,
+        purchased_on: purchasedOn || undefined,
+        comment: comment.trim() || undefined,
         links: linkList.length > 0 ? linkList : undefined,
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -178,11 +184,17 @@ export function NewOrderModal({
   const subAmounts = subs.map((s) => parseMoney(s.amount)).filter(Number.isFinite);
   const subSum = subAmounts.length >= 2 ? subAmounts.reduce((a, b) => a + b, 0) : null;
 
-  // Прогноз комиссии от предполагаемого веса — ориентир, в БД не пишется.
   const tariff = settings?.commission_per_kg_usd ?? 50;
+  // Фактический вес при пустой комиссии: бэкенд сам посчитает её по тарифу (как в карточке).
+  const factW = parseFloat(weight.replace(",", "."));
+  const weightCommissionHint =
+    commission.trim() === "" && !totalCommission && Number.isFinite(factW) && factW > 0
+      ? `Комиссия от веса: ${factW} кг × $${tariff}/кг = $${(factW * tariff).toFixed(2)} — запишется при создании, с ней заказ можно закрывать.`
+      : null;
+  // Прогноз комиссии от предполагаемого веса — ориентир, в БД не пишется.
   const estW = parseFloat(estWeight.replace(",", "."));
   const estCommissionHint =
-    commission.trim() === "" && Number.isFinite(estW) && estW > 0
+    commission.trim() === "" && !weightCommissionHint && Number.isFinite(estW) && estW > 0
       ? `Ориентир: ${estW} кг × $${tariff}/кг ≈ $${(estW * tariff).toFixed(2)}. Это прогноз — закрыть заказ можно будет только с настоящей комиссией (появится от фактического веса или руками).`
       : null;
 
@@ -298,7 +310,7 @@ export function NewOrderModal({
             onChange={(e) => setItems(e.target.value)}
           />
         </Field>
-        {/* Деньги — одной сеткой 2×2 */}
+        {/* Деньги и вес — одной сеткой в два столбца */}
         <div className="grid grid-cols-2 gap-3 rounded-md border border-line p-3">
           <Field label="Цена закупки, $">
             <Input
@@ -337,6 +349,15 @@ export function NewOrderModal({
               onChange={(e) => setEstWeight(e.target.value)}
             />
           </Field>
+          <Field label="Фактический вес, кг (можно позже)">
+            <Input
+              placeholder="не взвешен"
+              inputMode="decimal"
+              className="tnum"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+          </Field>
           {totalInvalid && (
             <p className="col-span-2 text-[12px] text-red-600 dark:text-red-400">
               Полная стоимость меньше закупки — комиссия вышла бы отрицательной.
@@ -347,6 +368,9 @@ export function NewOrderModal({
               Комиссия ${totalCommission} = полная стоимость − закупка. Это финальная комиссия — с
               ней заказ можно закрывать.
             </p>
+          )}
+          {weightCommissionHint && (
+            <p className="col-span-2 text-[12px] text-muted">{weightCommissionHint}</p>
           )}
           {estCommissionHint && !totalCommission && (
             <p className="col-span-2 text-[12px] text-muted">{estCommissionHint}</p>
@@ -361,17 +385,29 @@ export function NewOrderModal({
             onChange={(e) => setLinks(e.target.value)}
           />
         </Field>
-        <Field label="Обещанная дата (можно позже)">
-          <DatePicker
-            className="w-full"
-            clearable
-            value={promised || null}
-            onChange={(v) => setPromised(v ?? "")}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Дата покупки">
+            <DatePicker
+              className="w-full"
+              clearable
+              placeholder="сегодня"
+              value={purchasedOn || null}
+              onChange={(v) => setPurchasedOn(v ?? "")}
+            />
+          </Field>
+          <Field label="Обещанная дата (можно позже)">
+            <DatePicker
+              className="w-full"
+              clearable
+              value={promised || null}
+              onChange={(v) => setPromised(v ?? "")}
+            />
+          </Field>
+        </div>
+        <Field label="Комментарий (необязательно)">
+          <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
-        <p className="text-[12px] text-muted">
-          Фактический вес и треки добавите в карточке, когда появятся.
-        </p>
+        <p className="text-[12px] text-muted">Треки добавите в карточке, когда появятся.</p>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" onClick={onClose}>
             Отмена

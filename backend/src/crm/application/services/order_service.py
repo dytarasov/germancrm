@@ -128,7 +128,13 @@ class OrderService:
         if len(specs) > MAX_SUBORDERS:
             raise DomainValidationError(f"Слишком много подзаказов (максимум {MAX_SUBORDERS})")
         fields.setdefault("status", OrderStatus.PURCHASED)
-        fields.setdefault("purchased_on", business_today())
+        if fields.get("purchased_on") is None:
+            fields["purchased_on"] = business_today()
+        # как в update: фактический вес без ручной комиссии — комиссия по тарифу
+        if fields.get("weight_kg") is not None and fields.get("commission_usd") is None:
+            fields["commission_usd"] = rules.suggest_commission(
+                fields["weight_kg"], await self._commission_per_kg()
+            )
         async with self._uow:
             order = await self._orders.add(fields)
             for spec in specs:
