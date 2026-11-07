@@ -42,7 +42,7 @@ function matchesFilter(o: OrderListItem, f: Filter): boolean {
   return o.status === f;
 }
 
-/** Этапы маршрута: сколько заказов на каждом и на какую сумму закупки; тап — фильтр. */
+/** Этапы маршрута: сколько заказов на каждом, на какую сумму закупки и с какой комиссией; тап — фильтр. */
 function Pipeline({
   orders,
   filter,
@@ -58,6 +58,11 @@ function Pipeline({
       {STAGES.map((s) => {
         const list = orders.filter((o) => o.status === s);
         const sum = list.reduce((acc, o) => acc + parseFloat(o.purchase_price_usd), 0);
+        // заказы без комиссии в сумму не входят — она «ещё не знаю», а не 0
+        const commission = list.reduce(
+          (acc, o) => acc + (o.commission_usd === null ? 0 : parseFloat(o.commission_usd)),
+          0,
+        );
         const active = filter === s;
         return (
           <button
@@ -81,6 +86,9 @@ function Pipeline({
               {STAGE_SHORT[s] ?? STATUS_LABEL[s]}
             </span>
             <span className="block text-[11.5px] text-muted tnum">{fmtMoney(sum)}</span>
+            <span className="block text-[10.5px] text-green-700/80 tnum dark:text-green-400/80">
+              ком. {fmtMoney(commission)}
+            </span>
           </button>
         );
       })}
