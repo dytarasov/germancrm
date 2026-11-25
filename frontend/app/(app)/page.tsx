@@ -6,8 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import type { Dashboard, LoginBan, OrderListItem } from "@/lib/api-types";
 import { fmtDateTime, fmtMoney, plural } from "@/lib/format";
-import { STATUS_BAR, STATUS_LABEL } from "@/lib/status";
-import { Button, Card, EmptyState, cx } from "@/components/ui";
+import { STATUS_BAR, STATUS_CHIP, STATUS_LABEL } from "@/lib/status";
+import { Badge, Button, Card, EmptyState, cx } from "@/components/ui";
 import { OrdersTable } from "@/components/orders-table";
 import { NewOrderModal } from "@/components/new-order-modal";
 import { toastError, toastSaved } from "@/components/toasts";
@@ -82,9 +82,9 @@ function Pipeline({
             <span className="mt-2.5 block text-[22px] leading-none font-semibold tracking-tight tnum">
               {list.length}
             </span>
-            <span className="mt-1 block truncate text-[12px] font-medium text-muted">
+            <Badge className={cx("mt-1.5 max-w-full truncate", STATUS_CHIP[s])}>
               {STAGE_SHORT[s] ?? STATUS_LABEL[s]}
-            </span>
+            </Badge>
             <span className="block text-[11.5px] text-muted tnum">{fmtMoney(sum)}</span>
             <span className="block text-[10.5px] text-green-700/80 tnum dark:text-green-400/80">
               ком. {fmtMoney(commission)}

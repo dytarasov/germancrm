@@ -541,9 +541,14 @@ export default function OrderPage() {
                       {sub?.store_order_number ?? `подзаказ №${subIdx >= 0 ? subIdx + 1 : "?"}`}
                     </Badge>
                   )}
-                  <span>
-                    {h.old_status ? `${STATUS_LABEL[h.old_status]} → ` : ""}
-                    <span className="font-medium">{STATUS_LABEL[h.new_status]}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    {h.old_status && (
+                      <>
+                        <StatusBadge status={h.old_status} />
+                        <span className="text-muted">→</span>
+                      </>
+                    )}
+                    <StatusBadge status={h.new_status} />
                   </span>
                   {h.comment && <span className="text-muted">— {h.comment}</span>}
                 </li>

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { SearchResult } from "@/lib/api-types";
-import { STATUS_LABEL } from "@/lib/status";
+import type { OrderStatus, SearchResult } from "@/lib/api-types";
+import { StatusBadge } from "./status-badge";
 import { fmtMoney } from "@/lib/format";
 import { cx } from "./ui";
 
@@ -14,6 +14,7 @@ interface Item {
   group: string;
   label: string;
   sub: string;
+  status?: OrderStatus;
   href: string;
 }
 
@@ -80,7 +81,8 @@ export function CommandPalette() {
         key: `o${o.id}`,
         group: "Заказы",
         label: `#${o.id} · ${o.items}`,
-        sub: `${o.client_name} · ${o.store} · ${STATUS_LABEL[o.status]}`,
+        sub: `${o.client_name} · ${o.store}`,
+        status: o.status,
         href: `/orders/${o.id}`,
       });
     }
@@ -163,7 +165,10 @@ export function CommandPalette() {
                   </span>
                   <span className="text-[13px] font-medium">{item.label}</span>
                 </span>
-                <span className="shrink-0 text-[12px] text-muted">{item.sub}</span>
+                <span className="flex shrink-0 items-center gap-2 text-[12px] text-muted">
+                  {item.sub}
+                  {item.status && <StatusBadge status={item.status} />}
+                </span>
               </button>
             ))
           )}
