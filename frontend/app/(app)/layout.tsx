@@ -10,7 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <MobileNav />
       <CommandPalette />
       <main className="min-h-dvh lg:ml-52">
-        <div className="mx-auto max-w-6xl px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:px-6 sm:py-5">
+        <div className="mx-auto max-w-7xl px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:px-6 sm:py-5">
           {children}
         </div>
       </main>
