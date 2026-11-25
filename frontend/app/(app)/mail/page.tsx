@@ -16,7 +16,7 @@ import type {
   Settings,
 } from "@/lib/api-types";
 import { fmtDateTime } from "@/lib/format";
-import { Badge, Button, Card, EmptyState, Input, Section, Seg, Spinner, cx } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Modal, Section, Seg, Spinner, cx } from "@/components/ui";
 import { SelectBox } from "@/components/select-box";
 import { Combobox } from "@/components/combobox";
 import { pushToast, toastError, toastSaved } from "@/components/toasts";
@@ -182,7 +182,7 @@ function ResolveForm({
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-muted">Заказ</div>
+          <div className="text-[13px] font-medium">Заказ</div>
           <Combobox
             className="w-full"
             value={orderId}
@@ -197,7 +197,7 @@ function ResolveForm({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="text-[12px] font-medium text-muted">Событие</div>
+          <div className="text-[13px] font-medium">Что произошло</div>
           <SelectBox
             className="w-full"
             value={eventType}
@@ -208,21 +208,22 @@ function ResolveForm({
               { value: "arrived_at_warehouse", label: "Получено в США" },
             ]}
           />
-          <p className="text-[11.5px] text-muted">
-            Статус двигается только вперёд; устаревшее событие безопасно игнорируется.
+          <p className="text-[12.5px] text-muted">
+            Статус двигается только вперёд, назад не откатится.
           </p>
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <div className="text-[12px] font-medium text-muted">
+        <div className="text-[13px] font-medium">
           Треки
           {tracks.length > 0 && ` (${tracks.filter((t) => t.checked).length} из ${tracks.length})`}
         </div>
         {tracks.map((t) => (
-          <label key={t.number} className="flex min-h-8 items-center gap-2 text-[12.5px]">
+          <label key={t.number} className="flex min-h-10 items-center gap-2.5 text-[14px] sm:min-h-8">
             <input
               type="checkbox"
+              className="size-4"
               checked={t.checked}
               onChange={(e) =>
                 setTracks((ts) =>
@@ -236,7 +237,7 @@ function ResolveForm({
         <div className="flex flex-wrap gap-2">
           <Input
             className="font-mono sm:max-w-72"
-            placeholder="Добавить трек вручную…"
+            placeholder="Добавить трек…"
             value={manualTrack}
             onChange={(e) => setManualTrack(e.target.value)}
             onKeyDown={(e) => {
@@ -254,11 +255,11 @@ function ResolveForm({
 
       <Button
         variant="primary"
-        className="h-11 w-full sm:h-8 sm:w-auto"
+        className="h-11 w-full sm:h-9 sm:w-auto sm:px-5"
         disabled={!orderId || busy}
         onClick={apply}
       >
-        {busy ? "Применяю…" : "Применить"}
+        {busy ? "Применяю…" : orderId ? "Применить" : "Сначала выберите заказ"}
       </Button>
     </div>
   );
@@ -297,40 +298,45 @@ function EmailPanel({
     );
 
   const ex = detail.extracted;
+  const exTracks = ex ? [...new Set(ex.tracking_numbers.map((t) => t.number))] : [];
 
   return (
-    <div className="space-y-3 pt-3">
+    <div className="space-y-4 pt-3">
       {ex && (
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md bg-accent-soft px-2.5 py-1.5 text-[12px]">
-            <span className="font-medium text-accent">LLM увидел:</span>
-            <span>
-              {EVENT_RU[ex.event_type] ?? ex.event_type} ({Math.round(ex.confidence * 100)}%)
-            </span>
-            {ex.order_number && (
-              <span>
-                · заказ <span className="font-mono">{ex.order_number}</span>
-              </span>
-            )}
-            {ex.tracking_numbers.length > 0 && (
-              <span className="break-all">
-                · треки:{" "}
-                <span className="font-mono">
-                  {[...new Set(ex.tracking_numbers.map((t) => t.number))].join(", ")}
-                </span>
-              </span>
-            )}
-          </div>
+        <div className="space-y-2">
+          <h3 className="text-[13px] font-semibold">Что распознала автоматика</h3>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-surface2/60 p-3 text-[14px]">
+            <dt className="text-muted">Событие</dt>
+            <dd>
+              {EVENT_RU[ex.event_type] ?? ex.event_type}{" "}
+              <span className="text-muted">· уверенность {Math.round(ex.confidence * 100)}%</span>
+            </dd>
+            <dt className="text-muted">Номер заказа</dt>
+            <dd className={ex.order_number ? "font-mono break-all" : "text-muted"}>
+              {ex.order_number ?? "не найден"}
+            </dd>
+            <dt className="text-muted">Треки</dt>
+            <dd className={exTracks.length ? "font-mono break-all" : "text-muted"}>
+              {exTracks.length ? exTracks.join(", ") : "не найдены"}
+            </dd>
+          </dl>
           {ex.reasoning && (
-            <p className="px-2.5 text-[12px] text-muted">Почему: {ex.reasoning}</p>
+            <p className="text-[13px] leading-relaxed text-muted">{ex.reasoning}</p>
           )}
         </div>
       )}
 
       {detail.body_text && (
-        <pre className="max-h-56 overflow-y-auto rounded-md bg-surface2/60 p-2.5 font-mono text-[11.5px] leading-relaxed break-words whitespace-pre-wrap text-muted">
-          {detail.body_text}
-        </pre>
+        <details className="group rounded-lg border border-line">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-[13px] font-semibold sm:min-h-9">
+            Текст письма
+            <span className="text-[12.5px] font-normal text-muted group-open:hidden">показать</span>
+            <span className="hidden text-[12.5px] font-normal text-muted group-open:inline">скрыть</span>
+          </summary>
+          <div className="max-h-80 overflow-y-auto border-t border-line p-3 text-[13.5px] leading-relaxed break-words whitespace-pre-wrap">
+            {detail.body_text}
+          </div>
+        </details>
       )}
 
       {showEvents && (
@@ -366,7 +372,8 @@ function EmailPanel({
       )}
 
       {allowResolve && (
-        <div className="border-t border-line pt-3">
+        <div className="space-y-3 border-t border-line pt-4">
+          <h3 className="text-[13px] font-semibold">Привязать к заказу</h3>
           <ResolveForm emailId={emailId} extracted={ex} onDone={onDone} />
         </div>
       )}
@@ -402,67 +409,75 @@ function EmailCard({
   };
 
   return (
-    <div className="rounded-lg border border-line p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 truncate text-[13px] font-medium">{e.subject ?? "(без темы)"}</span>
-        <EmailStatusChip status={e.processing_status} />
-        <span className="ml-auto shrink-0 text-[11.5px] text-muted">{fmtDateTime(e.sent_at)}</span>
-      </div>
-      <div className="mt-0.5 text-[12px] text-muted">{e.from_addr}</div>
-      {!resolving && e.snippet && (
-        <div className="mt-1 line-clamp-2 text-[12px] text-muted">{e.snippet}</div>
-      )}
-      {showError && e.error && (
-        <div className="mt-1.5 rounded bg-red-500/8 px-2 py-1 font-mono text-[11.5px] break-words text-red-700 dark:text-red-400">
-          {e.error}
-        </div>
-      )}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Button className="h-9 sm:h-7" onClick={() => setResolving((v) => !v)}>
-          {resolving ? "Свернуть" : "Разобрать"}
-        </Button>
-        {filtered ? (
-          <>
-            <Button
-              className="h-9 sm:h-7"
-              onClick={() => act("retry", "Письмо уйдёт в LLM при следующем цикле")}
-            >
-              Прогнать через LLM
-            </Button>
-            {onWhitelist && (
+    <>
+      <div className="rounded-lg border border-line">
+        <button
+          onClick={() => setResolving(true)}
+          className="block w-full px-3.5 pt-3 pb-2 text-left hover:bg-surface2/40"
+        >
+          <div className="text-[14.5px] leading-snug font-semibold break-words">
+            {e.subject ?? "(без темы)"}
+          </div>
+          <div className="mt-1 text-[13px] text-muted">
+            {domainOf(e.from_addr)} · {fmtDateTime(e.sent_at)}
+          </div>
+          {showError && e.error && (
+            <div className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[13px] leading-snug text-amber-800 dark:text-amber-300">
+              {e.error}
+            </div>
+          )}
+        </button>
+        <div className="flex flex-wrap gap-2 px-3.5 pb-3 pt-1">
+          <Button variant="primary" className="h-10 sm:h-8 sm:px-4" onClick={() => setResolving(true)}>
+            Разобрать
+          </Button>
+          {filtered ? (
+            <>
+              <Button
+                className="h-10 sm:h-8"
+                onClick={() => act("retry", "Письмо уйдёт в LLM при следующем цикле")}
+              >
+                Прогнать через LLM
+              </Button>
+              {onWhitelist && (
+                <Button variant="ghost" className="h-10 sm:h-8" onClick={() => onWhitelist(e.from_addr)}>
+                  Домен в whitelist
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button className="h-10 sm:h-8" onClick={() => act("retry", "Письмо отправлено на переобработку")}>
+                Повторить
+              </Button>
               <Button
                 variant="ghost"
-                className="h-9 sm:h-7"
-                onClick={() => onWhitelist(e.from_addr)}
+                className="h-10 sm:h-8"
+                onClick={() => act("ignore", "Письмо проигнорировано")}
               >
-                Добавить домен в whitelist
+                Игнорировать
               </Button>
-            )}
-          </>
-        ) : (
-          <>
-            <Button className="h-9 sm:h-7" onClick={() => act("retry", "Письмо отправлено на переобработку")}>
-              Повторить
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-9 sm:h-7"
-              onClick={() => act("ignore", "Письмо проигнорировано")}
-            >
-              Игнорировать
-            </Button>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
-      {resolving && (
-        <EmailPanel
-          emailId={e.id}
-          allowResolve
-          showEvents={false}
-          onDone={() => setResolving(false)}
-        />
-      )}
-    </div>
+
+      <Modal open={resolving} onClose={() => setResolving(false)} title="Разбор письма" wide>
+        <div className="text-[16px] leading-snug font-semibold break-words">{e.subject ?? "(без темы)"}</div>
+        <div className="mt-1 text-[13px] break-all text-muted">
+          {e.from_addr} · {fmtDateTime(e.sent_at)}
+        </div>
+        {e.error && (
+          <div className="mt-3 rounded-md bg-amber-500/10 px-3 py-2 text-[13.5px] leading-snug text-amber-800 dark:text-amber-300">
+            <span className="font-semibold">Почему здесь: </span>
+            {e.error}
+          </div>
+        )}
+        {resolving && (
+          <EmailPanel emailId={e.id} allowResolve showEvents={false} onDone={() => setResolving(false)} />
+        )}
+      </Modal>
+    </>
   );
 }
 
